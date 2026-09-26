@@ -43,13 +43,6 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		ECA902163010C2F8001F32AB /* Exceptions for "Starship Watcher" folder in "Starship Watcher" target */ = {
-			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
-			membershipExceptions = (
-				"Starship-Watcher-Info.plist",
-			);
-			target = ECA901FE3010BAF1001F32AB /* Starship Watcher */;
-		};
 		ECFE07AA3010C374002BFC39 /* Exceptions for "WidgetExtension" folder in "WidgetExtensionExtension" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
@@ -62,9 +55,6 @@
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		ECA902013010BAF1001F32AB /* Starship Watcher */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			exceptions = (
-				ECA902163010C2F8001F32AB /* Exceptions for "Starship Watcher" folder in "Starship Watcher" target */,
-			);
 			path = "Starship Watcher";
 			sourceTree = "<group>";
 		};
@@ -371,7 +361,7 @@
 				DEVELOPMENT_TEAM = HK396F3767;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = "Starship-Watcher-Info.plist";
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -407,7 +397,7 @@
 				DEVELOPMENT_TEAM = HK396F3767;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = "Starship-Watcher-Info.plist";
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -443,7 +433,7 @@
 				DEVELOPMENT_TEAM = HK396F3767;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = WidgetExtension/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = WidgetExtension;
+				INFOPLIST_KEY_CFBundleDisplayName = "Starship Watcher";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -475,7 +465,7 @@
 				DEVELOPMENT_TEAM = HK396F3767;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = WidgetExtension/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = WidgetExtension;
+				INFOPLIST_KEY_CFBundleDisplayName = "Starship Watcher";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
