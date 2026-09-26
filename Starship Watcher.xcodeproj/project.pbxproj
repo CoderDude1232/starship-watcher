@@ -6,14 +6,74 @@
 	objectVersion = 110;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		ECFE07923010C373002BFC39 /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = ECFE07913010C373002BFC39 /* WidgetKit.framework */; };
+		ECFE07943010C373002BFC39 /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = ECFE07933010C373002BFC39 /* SwiftUI.framework */; };
+		ECFE07A53010C374002BFC39 /* WidgetExtensionExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = ECFE078F3010C373002BFC39 /* WidgetExtensionExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		ECFE07A33010C374002BFC39 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = ECA901F73010BAF1001F32AB /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = ECFE078E3010C372002BFC39;
+			remoteInfo = WidgetExtensionExtension;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		ECFE07A63010C374002BFC39 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			dstPath = "";
+			dstSubfolder = PlugIns;
+			files = (
+				ECFE07A53010C374002BFC39 /* WidgetExtensionExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
 		ECA901FF3010BAF1001F32AB /* Starship Watcher.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Starship Watcher.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		ECFE078F3010C373002BFC39 /* WidgetExtensionExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = WidgetExtensionExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		ECFE07913010C373002BFC39 /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
+		ECFE07933010C373002BFC39 /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
+		ECFE07AC3010C3F2002BFC39 /* WidgetExtensionExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = WidgetExtensionExtension.entitlements; sourceTree = "<group>"; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		ECA902163010C2F8001F32AB /* Exceptions for "Starship Watcher" folder in "Starship Watcher" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				"Starship-Watcher-Info.plist",
+			);
+			target = ECA901FE3010BAF1001F32AB /* Starship Watcher */;
+		};
+		ECFE07AA3010C374002BFC39 /* Exceptions for "WidgetExtension" folder in "WidgetExtensionExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = ECFE078E3010C372002BFC39 /* WidgetExtensionExtension */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		ECA902013010BAF1001F32AB /* Starship Watcher */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				ECA902163010C2F8001F32AB /* Exceptions for "Starship Watcher" folder in "Starship Watcher" target */,
+			);
 			path = "Starship Watcher";
+			sourceTree = "<group>";
+		};
+		ECFE07953010C373002BFC39 /* WidgetExtension */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				ECFE07AA3010C374002BFC39 /* Exceptions for "WidgetExtension" folder in "WidgetExtensionExtension" target */,
+			);
+			path = WidgetExtension;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -24,13 +84,23 @@
 			files = (
 			);
 		};
+		ECFE078C3010C372002BFC39 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			files = (
+				ECFE07943010C373002BFC39 /* SwiftUI.framework in Frameworks */,
+				ECFE07923010C373002BFC39 /* WidgetKit.framework in Frameworks */,
+			);
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
 		ECA901F63010BAF1001F32AB = {
 			isa = PBXGroup;
 			children = (
+				ECFE07AC3010C3F2002BFC39 /* WidgetExtensionExtension.entitlements */,
 				ECA902013010BAF1001F32AB /* Starship Watcher */,
+				ECFE07953010C373002BFC39 /* WidgetExtension */,
+				ECFE07903010C373002BFC39 /* Frameworks */,
 				ECA902003010BAF1001F32AB /* Products */,
 			);
 			sourceTree = "<group>";
@@ -39,8 +109,18 @@
 			isa = PBXGroup;
 			children = (
 				ECA901FF3010BAF1001F32AB /* Starship Watcher.app */,
+				ECFE078F3010C373002BFC39 /* WidgetExtensionExtension.appex */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		ECFE07903010C373002BFC39 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				ECFE07913010C373002BFC39 /* WidgetKit.framework */,
+				ECFE07933010C373002BFC39 /* SwiftUI.framework */,
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -53,8 +133,12 @@
 				ECA901FB3010BAF1001F32AB /* Sources */,
 				ECA901FC3010BAF1001F32AB /* Frameworks */,
 				ECA901FD3010BAF1001F32AB /* Resources */,
+				ECFE07A63010C374002BFC39 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
+			);
+			dependencies = (
+				ECFE07A43010C374002BFC39 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				ECA902013010BAF1001F32AB /* Starship Watcher */,
@@ -63,6 +147,24 @@
 			productName = "Starship Watcher";
 			productReference = ECA901FF3010BAF1001F32AB /* Starship Watcher.app */;
 			productType = "com.apple.product-type.application";
+		};
+		ECFE078E3010C372002BFC39 /* WidgetExtensionExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = ECFE07A93010C374002BFC39 /* Build configuration list for PBXNativeTarget "WidgetExtensionExtension" */;
+			buildPhases = (
+				ECFE078B3010C372002BFC39 /* Sources */,
+				ECFE078C3010C372002BFC39 /* Frameworks */,
+				ECFE078D3010C372002BFC39 /* Resources */,
+			);
+			buildRules = (
+			);
+			fileSystemSynchronizedGroups = (
+				ECFE07953010C373002BFC39 /* WidgetExtension */,
+			);
+			name = WidgetExtensionExtension;
+			productName = WidgetExtensionExtension;
+			productReference = ECFE078F3010C373002BFC39 /* WidgetExtensionExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
 		};
 /* End PBXNativeTarget section */
 
@@ -75,6 +177,9 @@
 				LastUpgradeCheck = 2700;
 				TargetAttributes = {
 					ECA901FE3010BAF1001F32AB = {
+						CreatedOnToolsVersion = 27.0;
+					};
+					ECFE078E3010C372002BFC39 = {
 						CreatedOnToolsVersion = 27.0;
 					};
 				};
@@ -94,12 +199,18 @@
 			projectRoot = "";
 			targets = (
 				ECA901FE3010BAF1001F32AB /* Starship Watcher */,
+				ECFE078E3010C372002BFC39 /* WidgetExtensionExtension */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		ECA901FD3010BAF1001F32AB /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			files = (
+			);
+		};
+		ECFE078D3010C372002BFC39 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			files = (
 			);
@@ -112,7 +223,20 @@
 			files = (
 			);
 		};
+		ECFE078B3010C372002BFC39 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			files = (
+			);
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		ECFE07A43010C374002BFC39 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = ECFE078E3010C372002BFC39 /* WidgetExtensionExtension */;
+			targetProxy = ECFE07A33010C374002BFC39 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		ECA902083010BAF3001F32AB /* Debug configuration for PBXProject "Starship Watcher" */ = {
@@ -241,11 +365,14 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "Starship Watcher/Starship Watcher.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = HK396F3767;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Starship-Watcher-Info.plist";
+				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -258,6 +385,7 @@
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.morgandaly.Starship-Watcher";
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
@@ -273,11 +401,14 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "Starship Watcher/Starship Watcher.entitlements";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = HK396F3767;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "Starship-Watcher-Info.plist";
+				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -290,9 +421,74 @@
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.morgandaly.Starship-Watcher";
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		ECFE07A73010C374002BFC39 /* Debug configuration for PBXNativeTarget "WidgetExtensionExtension" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = WidgetExtensionExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = HK396F3767;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = WidgetExtension/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = WidgetExtension;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.morgandaly.Starship-Watcher.WidgetExtension";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		ECFE07A83010C374002BFC39 /* Release configuration for PBXNativeTarget "WidgetExtensionExtension" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = WidgetExtensionExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = HK396F3767;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = WidgetExtension/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = WidgetExtension;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.morgandaly.Starship-Watcher.WidgetExtension";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
@@ -316,6 +512,14 @@
 			buildConfigurations = (
 				ECA9020B3010BAF3001F32AB /* Debug configuration for PBXNativeTarget "Starship Watcher" */,
 				ECA9020C3010BAF3001F32AB /* Release configuration for PBXNativeTarget "Starship Watcher" */,
+			);
+			defaultConfigurationName = Release;
+		};
+		ECFE07A93010C374002BFC39 /* Build configuration list for PBXNativeTarget "WidgetExtensionExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				ECFE07A73010C374002BFC39 /* Debug configuration for PBXNativeTarget "WidgetExtensionExtension" */,
+				ECFE07A83010C374002BFC39 /* Release configuration for PBXNativeTarget "WidgetExtensionExtension" */,
 			);
 			defaultConfigurationName = Release;
 		};
