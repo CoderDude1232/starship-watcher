@@ -1,5 +1,10 @@
 import Foundation
 
+enum LaunchLibraryError: Error {
+    /// HTTP 429. The free tier allows ~15 requests/hour per IP.
+    case rateLimited(retryAfter: TimeInterval?)
+}
+
 struct LaunchLibraryClient {
     private let session: URLSession
     private let decoder: JSONDecoder
@@ -17,9 +22,10 @@ struct LaunchLibraryClient {
         }
     }
 
-    func fetchStarshipFlights() async throws -> [StarshipFlight] {
+    /// One request for upcoming, plus one for previous when `includePrevious` is set.
+    func fetchStarshipFlights(includePrevious: Bool = true) async throws -> [StarshipFlight] {
         async let upcoming = fetch(path: "launch/upcoming/", ordering: "net")
-        async let previous = fetch(path: "launch/previous/", ordering: "-net")
+        async let previous = includePrevious ? fetch(path: "launch/previous/", ordering: "-net") : []
         let combined = try await upcoming + previous
 
         return combined
@@ -55,7 +61,14 @@ struct LaunchLibraryClient {
         request.setValue("Starship Watcher iOS", forHTTPHeaderField: "User-Agent")
 
         let (data, response) = try await session.data(for: request)
-        guard let httpResponse = response as? HTTPURLResponse, 200..<300 ~= httpResponse.statusCode else {
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw URLError(.badServerResponse)
+        }
+        if httpResponse.statusCode == 429 {
+            let retryAfter = httpResponse.value(forHTTPHeaderField: "Retry-After").flatMap(TimeInterval.init)
+            throw LaunchLibraryError.rateLimited(retryAfter: retryAfter)
+        }
+        guard 200..<300 ~= httpResponse.statusCode else {
             throw URLError(.badServerResponse)
         }
         return try decoder.decode(LaunchLibraryResponse.self, from: data).results

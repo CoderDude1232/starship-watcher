@@ -44,11 +44,15 @@ struct WidgetExtensionLiveActivity: Widget {
                 }
                 DynamicIslandExpandedRegion(.bottom) {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text(context.attributes.vehicle)
-                            .font(.caption2.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.72)
+                        HStack(spacing: 6) {
+                            Text(context.attributes.vehicle)
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.72)
+                            Spacer(minLength: 4)
+                            StatusPill(status: context.state.status)
+                        }
                         MissionCountdownText(targetDate: context.state.targetDate, size: 18)
                             .lineLimit(1)
                             .minimumScaleFactor(0.62)
@@ -98,6 +102,7 @@ private struct ConceptLockScreenActivity: View {
 
             VStack(spacing: 10) {
                 HStack(alignment: .top) {
+                    StatusPill(status: context.state.status)
                     Spacer(minLength: 0)
                     VStack(alignment: .trailing, spacing: 0) {
                         Text(shortMissionName(context.attributes.flightName))
@@ -131,35 +136,29 @@ private struct ConceptLockScreenActivity: View {
     }
 }
 
+/// Live Activities are rendered as snapshots, so `TimelineView` never ticks there.
+/// `Text(timerInterval:)` / `.timer` are drawn by the system and update every second on their own.
 private struct MissionCountdownText: View {
     let targetDate: Date?
     let size: CGFloat
 
     var body: some View {
-        TimelineView(.periodic(from: .now, by: 1)) { timeline in
-            Text(formattedCountdown(now: timeline.date))
-                .font(.system(size: size, weight: .bold))
-                .monospacedDigit()
-                .foregroundStyle(.white)
+        Group {
+            if let targetDate {
+                if targetDate > .now {
+                    Text("T-\(Text(timerInterval: Date.now...targetDate, countsDown: true))")
+                } else {
+                    // Re-rendered when the activity goes stale at the target date.
+                    Text("T+\(Text(targetDate, style: .timer))")
+                }
+            } else {
+                Text("TBD")
+            }
         }
-    }
-
-    private func formattedCountdown(now: Date) -> String {
-        guard let targetDate else { return "TBD" }
-        let interval = targetDate.timeIntervalSince(now)
-        let sign = interval >= 0 ? "T-" : "T+"
-        let remaining = abs(Int(interval))
-        let days = remaining / 86400
-        let hours = remaining / 3600 % 24
-        let minutes = remaining / 60 % 60
-        let seconds = remaining % 60
-        if days >= 10 {
-            return String(format: "%@%dD %02dH", sign, days, hours)
-        }
-        if days > 0 {
-            return String(format: "%@%dD %02d:%02d:%02d", sign, days, hours, minutes, seconds)
-        }
-        return String(format: "%@%02d:%02d:%02d", sign, hours, minutes, seconds)
+        .font(.system(size: size, weight: .bold))
+        .monospacedDigit()
+        .multilineTextAlignment(.trailing)
+        .foregroundStyle(.white)
     }
 }
 
@@ -167,28 +166,57 @@ private struct CompactCountdown: View {
     let targetDate: Date?
 
     var body: some View {
-        Text(shortText)
-            .font(.caption.weight(.black).monospacedDigit())
-            .foregroundStyle(.white)
-            .frame(maxWidth: 42, alignment: .trailing)
-            .lineLimit(1)
-            .minimumScaleFactor(0.75)
+        Group {
+            if let targetDate, targetDate > .now {
+                if targetDate.timeIntervalSinceNow >= 86400 {
+                    Text("\(Int(targetDate.timeIntervalSinceNow / 86400))d")
+                } else {
+                    Text(timerInterval: Date.now...targetDate, countsDown: true)
+                }
+            } else if targetDate != nil {
+                Text("LIVE")
+            } else {
+                Text("TBD")
+            }
+        }
+        .font(.caption.weight(.black).monospacedDigit())
+        .foregroundStyle(.white)
+        .multilineTextAlignment(.trailing)
+        .frame(maxWidth: 52, alignment: .trailing)
+        .lineLimit(1)
+        .minimumScaleFactor(0.75)
     }
+}
 
-    private var shortText: String {
-        guard let targetDate else { return "TBD" }
-        let remaining = max(0, Int(targetDate.timeIntervalSince(.now)))
-        let days = remaining / 86400
-        let hours = remaining / 3600 % 24
-        let minutes = remaining / 60 % 60
-        if days > 0 {
-            return "\(days)d"
-        }
-        if hours > 0 {
-            return "\(hours)h"
-        }
-        return "\(minutes)m"
+private struct StatusPill: View {
+    let status: String
+
+    var body: some View {
+        let (label, tint) = launchStatusBadge(status)
+        Text(label)
+            .font(.caption2.weight(.black))
+            .foregroundStyle(tint)
+            .lineLimit(1)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 3)
+            .background(tint.opacity(0.18), in: Capsule())
+            .overlay(Capsule().stroke(tint.opacity(0.45), lineWidth: 1))
     }
+}
+
+/// Short label + tint for Launch Library status names ("Go for Launch", "To Be Determined", ...).
+/// Shared by the Live Activity and Home Screen widgets.
+func launchStatusBadge(_ status: String) -> (String, Color) {
+    let value = status.lowercased()
+    if value.contains("success") { return ("SUCCESS", .teal) }
+    if value.contains("scrub") { return ("SCRUB", .red) }
+    if value.contains("fail") { return ("FAILURE", .red) }
+    if value.contains("flight") || value.contains("progress") { return ("IN FLIGHT", .blue) }
+    if value.contains("hold") { return ("HOLD", .orange) }
+    if value.contains("determined") || value.contains("tbd") { return ("TBD", .orange) }
+    if value.contains("confirmed") || value.contains("tbc") { return ("TBC", .yellow) }
+    if value.contains("go") { return ("GO", .green) }
+    return (status.isEmpty ? "—" : status.uppercased(), .gray)
 }
 
 private struct StarshipMark: View {

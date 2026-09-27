@@ -9,6 +9,7 @@ struct ContentView: View {
     @AppStorage("highContrastTelemetry") private var highContrastTelemetry = false
     @AppStorage("activityLeadHours") private var activityLeadHours = 6
     @AppStorage("backendCacheURL") private var backendCacheURL = ""
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         TabView {
@@ -49,6 +50,8 @@ struct ContentView: View {
         }
         .tint(.white)
         .task {
+            // Live Activities cap at 8h; older builds offered longer lead times.
+            activityLeadHours = min(activityLeadHours, 8)
             await repository.refresh()
             await syncLiveActivity()
             if notificationsEnabled, let nextFlight = repository.nextFlight {
@@ -56,14 +59,32 @@ struct ContentView: View {
             }
             await newsRepository.refresh()
         }
-        .onChange(of: liveActivityEnabled) { _, _ in
-            Task { await syncLiveActivity() }
+        .onChange(of: liveActivityEnabled) { _, enabled in
+            Task {
+                #if canImport(ActivityKit)
+                if !enabled { await StarshipActivityController().endAll() }
+                #endif
+                await syncLiveActivity()
+            }
         }
-        .onChange(of: repository.nextFlight?.id) { _, _ in
+        .onChange(of: scenePhase) { _, phase in
+            // Covers opening from the "countdown ready" reminder or a widget tap.
+            guard phase == .active, !repository.isLoading else { return }
+            Task {
+                await repository.refresh(minInterval: 15 * 60)
+                await syncLiveActivity()
+            }
+        }
+        .onChange(of: repository.nextFlight) { _, _ in
             Task { await syncLiveActivity() }
         }
         .onChange(of: activityLeadHours) { _, _ in
-            Task { await syncLiveActivity() }
+            Task {
+                await syncLiveActivity()
+                if notificationsEnabled, let nextFlight = repository.nextFlight {
+                    await NotificationScheduler().scheduleReminders(for: nextFlight)
+                }
+            }
         }
         .task(id: liveActivityMonitorID) {
             await monitorLiveActivityThresholds()
@@ -76,34 +97,19 @@ struct ContentView: View {
 
     private func syncLiveActivity() async {
         #if canImport(ActivityKit)
-        await StarshipActivityController().sync(enabled: shouldRunLiveActivity(at: .now), flight: repository.nextFlight)
+        await StarshipActivityController().sync(flight: repository.nextFlight, canStart: true)
         #endif
     }
 
-    private func shouldRunLiveActivity(at date: Date) -> Bool {
-        guard let launchDate = repository.nextFlight?.launchDate else { return false }
-        let remaining = launchDate.timeIntervalSince(date)
-        guard remaining > 0 else { return true }
-        let selectedLead = TimeInterval(activityLeadHours * 60 * 60)
-        let forcedLead: TimeInterval = 24 * 60 * 60
-        return (liveActivityEnabled && remaining <= selectedLead) || remaining <= forcedLead
-    }
-
     private func monitorLiveActivityThresholds() async {
-        guard let launchDate = repository.nextFlight?.launchDate else { return }
-        while !Task.isCancelled {
-            await syncLiveActivity()
-            let now = Date()
-            let selectedThreshold = launchDate.addingTimeInterval(-TimeInterval(activityLeadHours * 60 * 60))
-            let forcedThreshold = launchDate.addingTimeInterval(-24 * 60 * 60)
-            let nextThreshold = [selectedThreshold, forcedThreshold]
-                .filter { $0 > now }
-                .min()
-
-            guard let nextThreshold else { return }
-            let sleepSeconds = min(max(nextThreshold.timeIntervalSince(now), 30), 60 * 60)
-            try? await Task.sleep(for: .seconds(sleepSeconds))
+        #if canImport(ActivityKit)
+        guard liveActivityEnabled, let launchDate = repository.nextFlight?.launchDate else { return }
+        let start = StarshipActivityController.windowStart(for: launchDate)
+        while !Task.isCancelled, start > .now {
+            try? await Task.sleep(for: .seconds(min(max(start.timeIntervalSinceNow, 1), 60 * 60)))
         }
+        await syncLiveActivity()
+        #endif
     }
 }
 
@@ -146,7 +152,7 @@ private struct WatchView: View {
                     .animation(.smooth, value: repository.nextFlight?.id)
                 }
                 .refreshable {
-                    await repository.refresh()
+                    await repository.refresh(minInterval: 60)
                 }
             }
             .navigationTitle("Starship Watcher")
@@ -334,7 +340,7 @@ private struct FlightsView: View {
                     .padding(20)
                 }
                 .refreshable {
-                    await repository.refresh()
+                    await repository.refresh(minInterval: 60)
                 }
             }
             .navigationTitle("Flights")
@@ -692,7 +698,7 @@ private struct MissionScreen: View {
                     .padding(.bottom, 28)
                 }
                 .refreshable {
-                    await repository.refresh()
+                    await repository.refresh(minInterval: 60)
                 }
             }
             .navigationTitle("Mission")
@@ -705,9 +711,10 @@ private struct MissionScreen: View {
 
     private func refreshDuringActiveMission() async {
         while !Task.isCancelled, shouldRefreshLiveMission {
-            try? await Task.sleep(for: .seconds(60))
+            // Every 6 min keeps this under Launch Library's ~15 requests/hour.
+            try? await Task.sleep(for: .seconds(6 * 60))
             if !Task.isCancelled {
-                await repository.refresh()
+                await repository.refresh(minInterval: 5 * 60)
             }
         }
     }
@@ -1143,7 +1150,7 @@ private struct SettingsView: View {
                                 subtitle: "Show launch windows and target times in coordinated universal time.",
                                 isOn: $usesUTC
                             )
-                            SettingsPickerRow(title: "Countdown appears", selection: $activityLeadHours)
+                            SettingsPickerRow(title: "Live Activity starts", selection: $activityLeadHours)
                         }
 
                         SettingsPanel(title: "Alerts", symbol: "bell") {
@@ -1154,7 +1161,7 @@ private struct SettingsView: View {
                             )
                             SettingsToggleRow(
                                 title: "Live Activity",
-                                subtitle: "Show on the Lock Screen during your selected countdown window. T-24h starts automatically.",
+                                subtitle: "Pin the countdown to the Lock Screen automatically. Start it any time in the last 8h from the widget or Control Center.",
                                 isOn: $liveActivityEnabled
                             )
                         }
@@ -1243,7 +1250,7 @@ private struct SettingsPickerRow: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
                     .font(.subheadline.weight(.semibold))
-                Text("Choose how early the countdown surfaces should start appearing.")
+                Text("iOS keeps a Live Activity for up to 8 hours, so it starts no earlier than T-8h.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -1253,11 +1260,7 @@ private struct SettingsPickerRow: View {
                 Text("1h").tag(1)
                 Text("3h").tag(3)
                 Text("6h").tag(6)
-                Text("12h").tag(12)
-                Text("24h").tag(24)
-                Text("2d").tag(48)
-                Text("3d").tag(72)
-                Text("7d").tag(168)
+                Text("8h").tag(8)
             }
             .pickerStyle(.menu)
             .tint(.white)
@@ -1288,31 +1291,51 @@ private struct SettingsValueRow: View {
 
 private struct FlightImageBackdrop: View {
     let imageURL: URL?
+    @State private var image: UIImage?
 
     var body: some View {
         GeometryReader { proxy in
             ZStack {
-                SpaceBackdrop()
-                    .frame(width: proxy.size.width, height: proxy.size.height)
-
-                if let imageURL {
-                    AsyncImage(url: imageURL) { phase in
-                        if let image = phase.image {
-                            image
-                                .resizable()
-                                .scaledToFill()
-                        }
-                    }
-                    .frame(width: proxy.size.width, height: proxy.size.height)
-                    .clipped()
-                    .overlay(.black.opacity(0.52))
-                    .overlay(
-                        LinearGradient(colors: [.black.opacity(0.16), .black.opacity(0.86)], startPoint: .top, endPoint: .bottom)
-                    )
+                if let image {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: proxy.size.width, height: proxy.size.height)
+                        .clipped()
+                        .overlay(.black.opacity(0.52))
+                        .overlay(
+                            // Darker at the top so the large navigation title stays readable.
+                            LinearGradient(
+                                stops: [
+                                    .init(color: .black.opacity(0.7), location: 0),
+                                    .init(color: .black.opacity(0.2), location: 0.3),
+                                    .init(color: .black.opacity(0.86), location: 1)
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                        .transition(.opacity)
+                } else {
+                    // Only animate the star field when no photo covers it.
+                    SpaceBackdrop()
+                        .frame(width: proxy.size.width, height: proxy.size.height)
                 }
             }
             .frame(width: proxy.size.width, height: proxy.size.height)
             .clipped()
+        }
+        .task(id: imageURL) {
+            guard let imageURL else {
+                image = nil
+                return
+            }
+            if let cached = BackdropImageLoader.shared.cachedImage(for: imageURL) {
+                image = cached
+                return
+            }
+            let loaded = await BackdropImageLoader.shared.image(for: imageURL)
+            withAnimation(.easeOut(duration: 0.4)) { image = loaded }
         }
     }
 }
