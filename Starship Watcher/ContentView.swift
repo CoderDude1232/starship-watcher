@@ -71,9 +71,7 @@ struct ContentView: View {
             // Covers opening from the "countdown ready" reminder or a widget tap.
             guard phase == .active, !repository.isLoading else { return }
             Task {
-                if (repository.lastUpdated ?? .distantPast).timeIntervalSinceNow < -15 * 60 {
-                    await repository.refresh()
-                }
+                await repository.refresh(minInterval: 15 * 60)
                 await syncLiveActivity()
             }
         }
@@ -154,7 +152,7 @@ private struct WatchView: View {
                     .animation(.smooth, value: repository.nextFlight?.id)
                 }
                 .refreshable {
-                    await repository.refresh()
+                    await repository.refresh(minInterval: 60)
                 }
             }
             .navigationTitle("Starship Watcher")
@@ -342,7 +340,7 @@ private struct FlightsView: View {
                     .padding(20)
                 }
                 .refreshable {
-                    await repository.refresh()
+                    await repository.refresh(minInterval: 60)
                 }
             }
             .navigationTitle("Flights")
@@ -700,7 +698,7 @@ private struct MissionScreen: View {
                     .padding(.bottom, 28)
                 }
                 .refreshable {
-                    await repository.refresh()
+                    await repository.refresh(minInterval: 60)
                 }
             }
             .navigationTitle("Mission")
@@ -713,9 +711,10 @@ private struct MissionScreen: View {
 
     private func refreshDuringActiveMission() async {
         while !Task.isCancelled, shouldRefreshLiveMission {
-            try? await Task.sleep(for: .seconds(60))
+            // Every 6 min keeps this under Launch Library's ~15 requests/hour.
+            try? await Task.sleep(for: .seconds(6 * 60))
             if !Task.isCancelled {
-                await repository.refresh()
+                await repository.refresh(minInterval: 5 * 60)
             }
         }
     }

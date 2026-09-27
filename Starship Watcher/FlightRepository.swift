@@ -1,5 +1,6 @@
 import Foundation
 import Observation
+import WidgetKit
 
 @Observable
 @MainActor
@@ -49,7 +50,16 @@ final class FlightRepository {
             .sorted { ($0.launchDate ?? .distantPast) > ($1.launchDate ?? .distantPast) }
     }
 
-    func refresh() async {
+    /// Launch Library's free tier allows ~15 requests/hour per IP, shared by the app, background
+    /// refresh and the start-countdown intent. Skips the network if the last attempt (from any of
+    /// those) was within `minInterval`, or while backing off after a 429.
+    func refresh(minInterval: TimeInterval = 10 * 60) async {
+        let defaults = UserDefaults.standard
+        let now = Date.now
+        if let cooldown = defaults.object(forKey: Self.cooldownKey) as? Date, cooldown > now { return }
+        if let lastAttempt = defaults.object(forKey: Self.lastAttemptKey) as? Date, now.timeIntervalSince(lastAttempt) < minInterval { return }
+        defaults.set(now, forKey: Self.lastAttemptKey)
+
         isLoading = true
         errorMessage = nil
         defer { isLoading = false }
@@ -58,20 +68,45 @@ final class FlightRepository {
             return
         }
 
+        // Past flights rarely change: refetch every 6h, or once a cached flight has launched.
+        let lastPreviousFetch = defaults.object(forKey: Self.lastPreviousFetchKey) as? Date ?? .distantPast
+        let launchedSinceFetch = flights.contains { flight in
+            guard let launchDate = flight.launchDate else { return false }
+            return launchDate > lastPreviousFetch && launchDate < now
+        }
+        let includePrevious = launchedSinceFetch || now.timeIntervalSince(lastPreviousFetch) > 6 * 60 * 60 || lastUpdated == nil
+
         do {
-            let fetchedFlights = try await client.fetchStarshipFlights()
+            let fetchedFlights = try await client.fetchStarshipFlights(includePrevious: includePrevious)
             guard !fetchedFlights.isEmpty else {
                 throw URLError(.zeroByteResource)
             }
-            flights = fetchedFlights
+            let merged: [StarshipFlight]
+            if includePrevious {
+                defaults.set(now, forKey: Self.lastPreviousFetchKey)
+                merged = fetchedFlights
+            } else {
+                let fetchedIDs = Set(fetchedFlights.map(\.id))
+                let cachedPast = flights.filter { !fetchedIDs.contains($0.id) && ($0.launchDate ?? .distantFuture) < now }
+                merged = fetchedFlights + cachedPast
+            }
+            flights = merged
             activeSource = "Launch Library 2"
             sourceWarningMessage = nil
             lastUpdated = .now
-            saveCachedFlights(fetchedFlights)
+            saveCachedFlights(merged)
+        } catch LaunchLibraryError.rateLimited(let retryAfter) {
+            // Keep cached data rather than dropping to the lower-confidence backup source.
+            defaults.set(now.addingTimeInterval(retryAfter ?? 15 * 60), forKey: Self.cooldownKey)
+            errorMessage = "Launch Library rate limit reached. Showing saved data."
         } catch {
             await refreshFromFallback()
         }
     }
+
+    private static let lastAttemptKey = "launchDataLastAttempt"
+    private static let lastPreviousFetchKey = "launchDataLastPreviousFetch"
+    private static let cooldownKey = "launchDataCooldownUntil"
 
     private func refreshFromBackend() async -> Bool {
         let rawEndpoint = UserDefaults.standard.string(forKey: "backendCacheURL") ?? ""
@@ -115,7 +150,9 @@ final class FlightRepository {
             let cached = try JSONDecoder.starship.decode(CachedFlights.self, from: data)
             flights = cached.flights
             activeSource = "Saved cache"
-            sourceWarningMessage = "Showing saved launch data. Flight timing or status may be outdated until a trusted launch source refreshes."
+            if cached.lastUpdated.timeIntervalSinceNow < -30 * 60 {
+                sourceWarningMessage = "Showing saved launch data. Flight timing or status may be outdated until a trusted launch source refreshes."
+            }
             lastUpdated = cached.lastUpdated
         } catch {
             flights = []
@@ -127,6 +164,7 @@ final class FlightRepository {
             let cached = CachedFlights(lastUpdated: .now, flights: flights)
             let data = try JSONEncoder.starship.encode(cached)
             try data.write(to: cacheURL, options: [.atomic])
+            WidgetCenter.shared.reloadAllTimelines()
         } catch {
             errorMessage = "Fresh launch data loaded, but cache storage failed."
         }

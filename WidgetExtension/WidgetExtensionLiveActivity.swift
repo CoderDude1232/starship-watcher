@@ -205,7 +205,8 @@ private struct StatusPill: View {
 }
 
 /// Short label + tint for Launch Library status names ("Go for Launch", "To Be Determined", ...).
-private func launchStatusBadge(_ status: String) -> (String, Color) {
+/// Shared by the Live Activity and Home Screen widgets.
+func launchStatusBadge(_ status: String) -> (String, Color) {
     let value = status.lowercased()
     if value.contains("success") { return ("SUCCESS", .teal) }
     if value.contains("scrub") { return ("SCRUB", .red) }

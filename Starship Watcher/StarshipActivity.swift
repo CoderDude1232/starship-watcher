@@ -66,8 +66,13 @@ struct StarshipActivityController {
             return
         }
 
-        // Keep a running activity through delays and TBD so the status change stays visible.
         if let existing = Self.liveActivities.first(where: { $0.attributes.flightID == flight.id }) {
+            // Slipped more than 8h out (or started by an older build): hide until the window reopens.
+            if let launchDate = flight.launchDate, launchDate.timeIntervalSinceNow > Self.maxLead {
+                await endAll()
+                return
+            }
+            // Otherwise keep it through holds and TBD so the status change stays visible.
             await update(existing, for: flight)
             await endAll(except: existing.id)
             return

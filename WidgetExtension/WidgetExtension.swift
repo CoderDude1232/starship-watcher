@@ -12,6 +12,8 @@ struct Provider: AppIntentTimelineProvider {
     }
 
     func timeline(for configuration: ConfigurationAppIntent, in context: Context) async -> Timeline<StarshipWidgetEntry> {
+        // The app keeps the shared cache fresh (and reloads widgets when it does), so the widget
+        // only hits the network itself before the app has ever loaded data.
         let flight: WidgetFlight
         if let cachedFlight = WidgetSharedCache().nextFlight() {
             flight = cachedFlight
@@ -20,14 +22,19 @@ struct Provider: AppIntentTimelineProvider {
         } else if let fallbackFlight = await WidgetSpaceXClient().nextStarshipFlight() {
             flight = fallbackFlight
         } else {
-            flight = .placeholder
+            flight = .unavailable
         }
+
         let now = Date()
-        let entries = stride(from: 0, through: 60, by: 15).map { minute in
-            let date = Calendar.current.date(byAdding: .minute, value: minute, to: now) ?? now
-            return StarshipWidgetEntry(date: date, configuration: configuration, flight: flight)
+        let reloadDate = now.addingTimeInterval(60 * 60)
+        // Countdown text only changes format at T-24h (days -> ticking timer) and T-0 (T+),
+        // and "T-1D 12H" needs a fresh entry each hour. The timer text ticks on its own.
+        var dates = stride(from: 0, to: 60, by: 15).map { now.addingTimeInterval(TimeInterval($0 * 60)) }
+        if let launchDate = flight.launchDate {
+            dates += [launchDate.addingTimeInterval(-24 * 60 * 60), launchDate, launchDate.addingTimeInterval(-8 * 60 * 60)]
+                .filter { $0 > now && $0 < reloadDate }
         }
-        let reloadDate = Calendar.current.date(byAdding: .hour, value: 1, to: now) ?? now.addingTimeInterval(3600)
+        let entries = dates.sorted().map { StarshipWidgetEntry(date: $0, configuration: configuration, flight: flight) }
         return Timeline(entries: entries, policy: .after(reloadDate))
     }
 }
@@ -207,14 +214,16 @@ private struct WidgetStatusSiteRow: View {
     let compact: Bool
 
     var body: some View {
+        let (label, tint) = launchStatusBadge(flight.status)
         HStack(spacing: compact ? 6 : 8) {
-            Text(shortStatus)
+            Text(label)
                 .font(.caption.weight(.black))
+                .foregroundStyle(tint)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
                 .padding(.horizontal, compact ? 8 : 10)
                 .padding(.vertical, compact ? 4 : 5)
-                .background(.white.opacity(0.16), in: Capsule())
+                .background(tint.opacity(0.18), in: Capsule())
 
             Label(flight.pad, systemImage: "mappin.and.ellipse")
                 .font(.caption.weight(.bold))
@@ -223,17 +232,6 @@ private struct WidgetStatusSiteRow: View {
                 .foregroundStyle(.white.opacity(0.76))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private var shortStatus: String {
-        let status = flight.displayStatus.trimmingCharacters(in: .whitespacesAndNewlines)
-        if status.localizedCaseInsensitiveContains("confirm") || status.localizedCaseInsensitiveContains("tbd") {
-            return "TBD"
-        }
-        if status.localizedCaseInsensitiveContains("go") {
-            return "GO"
-        }
-        return status.uppercased()
     }
 }
 
@@ -293,11 +291,9 @@ struct WidgetFlight: Decodable, Hashable {
     let launchDate: Date?
     let pad: String
 
-    var displayStatus: String {
-        status.lowercased() == "go" ? "Go for launch" : status
-    }
-
     static let placeholder = WidgetFlight(name: "Flight Test", status: "TBD", launchDate: Calendar.current.date(byAdding: .day, value: 1, to: .now), pad: "Starbase")
+    /// No data at all: show TBD rather than a fake countdown.
+    static let unavailable = WidgetFlight(name: "Starship", status: "TBD", launchDate: nil, pad: "Starbase")
 }
 
 private struct WidgetLaunchClient {
@@ -333,13 +329,20 @@ private struct WidgetLaunchClient {
 }
 
 private struct WidgetSharedCache {
+    /// Must match the app's `JSONEncoder.starship` (ISO8601 dates).
+    private static let decoder: JSONDecoder = {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return decoder
+    }()
+
     func nextFlight() -> WidgetFlight? {
         guard let containerURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.com.morgandaly.Starship-Watcher") else {
             return nil
         }
         let cacheURL = containerURL.appending(path: "starship-flights-cache.json")
         guard let data = try? Data(contentsOf: cacheURL),
-              let cached = try? JSONDecoder().decode(WidgetCachedFlights.self, from: data) else {
+              let cached = try? Self.decoder.decode(WidgetCachedFlights.self, from: data) else {
             return nil
         }
         return cached.flights

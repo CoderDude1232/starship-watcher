@@ -10,9 +10,7 @@ struct StartLaunchCountdownIntent: LiveActivityIntent {
     @MainActor
     func perform() async throws -> some IntentResult {
         let repository = FlightRepository()
-        if (repository.lastUpdated ?? .distantPast).timeIntervalSinceNow < -15 * 60 {
-            await repository.refresh()
-        }
+        await repository.refresh(minInterval: 15 * 60)
         guard let flight = repository.nextFlight else { throw CountdownStartError.launchTBD }
         try await StarshipActivityController().startNow(flight: flight)
         BackgroundRefresh.schedule()
