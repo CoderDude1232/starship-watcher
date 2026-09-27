@@ -14,6 +14,9 @@ struct Starship_WatcherApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                // The UI is designed dark-only; in light mode system chrome (large titles,
+                // tab bar) rendered black on the dark photo backdrop.
+                .preferredColorScheme(.dark)
         }
         .onChange(of: scenePhase) { _, phase in
             if phase == .background {

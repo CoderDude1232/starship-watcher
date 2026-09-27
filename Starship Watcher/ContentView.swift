@@ -1291,31 +1291,51 @@ private struct SettingsValueRow: View {
 
 private struct FlightImageBackdrop: View {
     let imageURL: URL?
+    @State private var image: UIImage?
 
     var body: some View {
         GeometryReader { proxy in
             ZStack {
-                SpaceBackdrop()
-                    .frame(width: proxy.size.width, height: proxy.size.height)
-
-                if let imageURL {
-                    AsyncImage(url: imageURL) { phase in
-                        if let image = phase.image {
-                            image
-                                .resizable()
-                                .scaledToFill()
-                        }
-                    }
-                    .frame(width: proxy.size.width, height: proxy.size.height)
-                    .clipped()
-                    .overlay(.black.opacity(0.52))
-                    .overlay(
-                        LinearGradient(colors: [.black.opacity(0.16), .black.opacity(0.86)], startPoint: .top, endPoint: .bottom)
-                    )
+                if let image {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: proxy.size.width, height: proxy.size.height)
+                        .clipped()
+                        .overlay(.black.opacity(0.52))
+                        .overlay(
+                            // Darker at the top so the large navigation title stays readable.
+                            LinearGradient(
+                                stops: [
+                                    .init(color: .black.opacity(0.7), location: 0),
+                                    .init(color: .black.opacity(0.2), location: 0.3),
+                                    .init(color: .black.opacity(0.86), location: 1)
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                        .transition(.opacity)
+                } else {
+                    // Only animate the star field when no photo covers it.
+                    SpaceBackdrop()
+                        .frame(width: proxy.size.width, height: proxy.size.height)
                 }
             }
             .frame(width: proxy.size.width, height: proxy.size.height)
             .clipped()
+        }
+        .task(id: imageURL) {
+            guard let imageURL else {
+                image = nil
+                return
+            }
+            if let cached = BackdropImageLoader.shared.cachedImage(for: imageURL) {
+                image = cached
+                return
+            }
+            let loaded = await BackdropImageLoader.shared.image(for: imageURL)
+            withAnimation(.easeOut(duration: 0.4)) { image = loaded }
         }
     }
 }
