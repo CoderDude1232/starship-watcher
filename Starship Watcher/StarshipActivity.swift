@@ -3,7 +3,7 @@ import Foundation
 #if canImport(ActivityKit)
 @preconcurrency import ActivityKit
 
-struct StarshipFlightAttributes: ActivityAttributes, Sendable {
+nonisolated struct StarshipFlightAttributes: ActivityAttributes, Sendable {
     struct ContentState: Codable, Hashable, Sendable {
         let phase: String
         let status: String

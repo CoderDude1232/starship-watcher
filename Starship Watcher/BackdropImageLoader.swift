@@ -8,7 +8,8 @@ import UIKit
 actor BackdropImageLoader {
     static let shared = BackdropImageLoader()
 
-    private let cache = NSCache<NSURL, UIImage>()
+    // NSCache is thread-safe, so reads can skip the actor hop.
+    private nonisolated(unsafe) let cache = NSCache<NSURL, UIImage>()
     private var inFlight: [URL: Task<UIImage?, Never>] = [:]
 
     nonisolated func cachedImage(for url: URL) -> UIImage? {
