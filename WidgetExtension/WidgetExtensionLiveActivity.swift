@@ -8,6 +8,8 @@ struct StarshipFlightAttributes: ActivityAttributes, Sendable {
         let status: String
         let targetDate: Date?
         let detail: String
+        /// Current mission event ("Hot staging"). Optional so states from older builds still decode.
+        var stage: String? = nil
     }
 
     let flightID: String
@@ -45,9 +47,9 @@ struct WidgetExtensionLiveActivity: Widget {
                 DynamicIslandExpandedRegion(.bottom) {
                     VStack(alignment: .leading, spacing: 6) {
                         HStack(spacing: 6) {
-                            Text(context.attributes.vehicle)
+                            Text(context.state.stage ?? context.attributes.vehicle)
                                 .font(.caption2.weight(.semibold))
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(context.state.stage == nil ? .secondary : .primary)
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.72)
                             Spacer(minLength: 4)
@@ -102,7 +104,16 @@ private struct ConceptLockScreenActivity: View {
 
             VStack(spacing: 10) {
                 HStack(alignment: .top) {
-                    StatusPill(status: context.state.status)
+                    VStack(alignment: .leading, spacing: 6) {
+                        StatusPill(status: context.state.status)
+                        if let stage = context.state.stage {
+                            Text(stage.uppercased())
+                                .font(.system(.caption, design: .monospaced).weight(.bold))
+                                .foregroundStyle(.white.opacity(0.8))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.7)
+                        }
+                    }
                     Spacer(minLength: 0)
                     VStack(alignment: .trailing, spacing: 0) {
                         Text(shortMissionName(context.attributes.flightName))
@@ -260,7 +271,8 @@ extension StarshipFlightAttributes.ContentState {
             phase: "Countdown",
             status: "Go for launch",
             targetDate: Calendar.current.date(byAdding: .day, value: 1, to: .now),
-            detail: "Orbital Launch Mount"
+            detail: "Orbital Launch Mount",
+            stage: "Engine chill"
         )
     }
 }

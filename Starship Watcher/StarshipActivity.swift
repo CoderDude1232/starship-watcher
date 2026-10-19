@@ -9,6 +9,8 @@ struct StarshipFlightAttributes: ActivityAttributes, Sendable {
         let status: String
         let targetDate: Date?
         let detail: String
+        /// Current mission event ("Hot staging"). Optional so states from older builds still decode.
+        var stage: String? = nil
     }
 
     let flightID: String
@@ -150,12 +152,16 @@ struct StarshipActivityController {
         return AlertConfiguration(title: "\(flightName) update", body: "\(body)", sound: .default)
     }
 
+    /// The stage only moves at sync points (foreground, Mission tab poll, BG refresh); without
+    /// ActivityKit push it can lag the real flight between them. Stage changes alone never alert.
     private func contentState(for flight: StarshipFlight) -> StarshipFlightAttributes.ContentState {
-        StarshipFlightAttributes.ContentState(
-            phase: "Countdown",
+        let event = flight.currentEvent(now: .now)
+        return StarshipFlightAttributes.ContentState(
+            phase: event?.phase.rawValue ?? "Countdown",
             status: flight.status.name,
             targetDate: flight.launchDate,
-            detail: flight.padName
+            detail: flight.padName,
+            stage: event?.title
         )
     }
 }

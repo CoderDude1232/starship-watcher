@@ -618,11 +618,12 @@ private struct FlightDetailView: View {
                         SectionRule(title: "Mission Events", symbol: "point.3.connected.trianglepath.dotted")
                         TimelineView(.periodic(from: .now, by: 1)) { timeline in
                             let events = flight.timeline
+                            let current = flight.currentEventIndex(in: events, now: timeline.date)
                             VStack(spacing: 12) {
                                 ForEach(events.indices, id: \.self) { index in
                                     MissionEventRow(
                                         event: events[index],
-                                        state: events.missionState(for: index, now: timeline.date),
+                                        state: events.missionState(for: index, current: current),
                                         usesUTC: usesUTC
                                     )
                                 }
@@ -678,11 +679,12 @@ private struct MissionScreen: View {
                                 SectionRule(title: "Sequence", symbol: "list.number")
                                 TimelineView(.periodic(from: .now, by: 1)) { timeline in
                                     let events = flight.timeline
+                                    let current = flight.currentEventIndex(in: events, now: timeline.date)
                                     VStack(spacing: 14) {
                                         ForEach(events.indices, id: \.self) { index in
                                             MissionEventRow(
                                                 event: events[index],
-                                                state: events.missionState(for: index, now: timeline.date),
+                                                state: events.missionState(for: index, current: current),
                                                 usesUTC: usesUTC
                                             )
                                         }
@@ -715,6 +717,10 @@ private struct MissionScreen: View {
             try? await Task.sleep(for: .seconds(6 * 60))
             if !Task.isCancelled {
                 await repository.refresh(minInterval: 5 * 60)
+                // Push the current stage even when Launch Library data didn't change.
+                #if canImport(ActivityKit)
+                await StarshipActivityController().sync(flight: repository.nextFlight, canStart: false)
+                #endif
             }
         }
     }
@@ -727,30 +733,23 @@ private struct MissionScreen: View {
 
 }
 
+/// `current` comes from `StarshipFlight.currentEventIndex`, which holds post-T0 events until liftoff is confirmed.
 private extension Array where Element == FlightEvent {
-    func missionState(for index: Int, now: Date) -> MissionEventState {
-        guard indices.contains(index), let targetDate = self[index].targetDate else { return .pending }
-        let nextDate = dropFirst(index + 1).first?.targetDate
-
-        if let nextDate, now >= targetDate, now < nextDate {
-            return .current
-        }
-        if now >= targetDate {
-            return .complete
-        }
-        return .pending
+    func missionState(for index: Int, current: Int?) -> MissionEventState {
+        guard let current, index <= current else { return .pending }
+        // The final event stays complete rather than active once reached.
+        return index == current && index < count - 1 ? .current : .complete
     }
 
-    /// Index into `FlightPhase.allCases` for the most recently started event's phase.
-    func currentPhaseIndex(now: Date) -> Int? {
-        let started = filter { ($0.targetDate ?? .distantFuture) <= now }
-        guard let last = started.last else { return nil }
-        return FlightPhase.allCases.firstIndex(of: last.phase)
+    /// Index into `FlightPhase.allCases` for the current event's phase.
+    func currentPhaseIndex(current: Int?) -> Int? {
+        current.flatMap { FlightPhase.allCases.firstIndex(of: self[$0].phase) }
     }
 
-    /// The next event that has not yet occurred.
-    func nextEvent(now: Date) -> FlightEvent? {
-        first { ($0.targetDate ?? .distantPast) > now }
+    /// The next event not yet reached.
+    func nextEvent(current: Int?) -> FlightEvent? {
+        let nextIndex = current.map { $0 + 1 } ?? 0
+        return indices.contains(nextIndex) ? self[nextIndex] : nil
     }
 }
 
@@ -763,8 +762,11 @@ private struct MissionTelemetryPanel: View {
             SectionRule(title: "Telemetry", symbol: "waveform.path.ecg")
             TimelineView(.periodic(from: .now, by: 1)) { timeline in
                 let now = timeline.date
-                let activeIndex = events.currentPhaseIndex(now: now)
-                let next = events.nextEvent(now: now)
+                let current = flight.currentEventIndex(in: events, now: now)
+                let activeIndex = events.currentPhaseIndex(current: current)
+                let next = events.nextEvent(current: current)
+                // NET passed without confirmed liftoff: a hold or late launch, not T+.
+                let awaitingLiftoff = !flight.hasLiftedOff(now: now) && (flight.launchDate ?? .distantFuture) <= now
                 VStack(spacing: 16) {
                     PhaseProgressBar(activeIndex: activeIndex)
                     TelemetryGrid(items: [
@@ -774,9 +776,16 @@ private struct MissionTelemetryPanel: View {
                             tint: activeIndex == nil ? .white : Theme.accent,
                             systemImage: "circle.dotted"
                         ),
-                        TelemetryItem(label: "Liftoff", value: Countdown.text(to: flight.launchDate, now: now), tint: .white, systemImage: "flame"),
+                        TelemetryItem(label: "Liftoff", value: awaitingLiftoff ? "Awaiting" : Countdown.text(to: flight.launchDate, now: now), tint: awaitingLiftoff ? StatusTint.caution.color : .white, systemImage: "flame"),
                         TelemetryItem(label: "Next Event", value: next?.title ?? "Sequence complete", systemImage: "forward.end.fill"),
-                        TelemetryItem(label: "Event In", value: next.flatMap { Countdown.text(to: $0.targetDate, now: now) } ?? "—", systemImage: "timer")
+                        TelemetryItem(
+                            label: "Event In",
+                            value: next.flatMap { event in
+                                guard let target = event.targetDate else { return nil }
+                                return target <= now ? "Holding" : Countdown.text(to: target, now: now)
+                            } ?? "—",
+                            systemImage: "timer"
+                        )
                     ])
                 }
             }
