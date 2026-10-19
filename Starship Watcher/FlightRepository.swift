@@ -99,9 +99,19 @@ final class FlightRepository {
             // Keep cached data rather than dropping to the lower-confidence backup source.
             defaults.set(now.addingTimeInterval(retryAfter ?? 15 * 60), forKey: Self.cooldownKey)
             errorMessage = "Launch Library rate limit reached. Showing saved data."
+        } catch where hasRecentTrustedData {
+            errorMessage = "Launch Library is unavailable. Showing saved data."
         } catch {
             await refreshFromFallback()
         }
+    }
+
+    /// The SpaceXData backup uses different flight IDs and status names, so swapping it in over
+    /// good data (e.g. an LL2 timeout on launch day) ended the Live Activity and fired bogus
+    /// status alerts. Only fall back when the saved data isn't recent Launch Library/backend data.
+    private var hasRecentTrustedData: Bool {
+        guard let lastUpdated, Date.now.timeIntervalSince(lastUpdated) < 24 * 60 * 60, !flights.isEmpty else { return false }
+        return !flights.contains { $0.id.hasPrefix(SpaceXFallbackClient.idPrefix) }
     }
 
     private static let lastAttemptKey = "launchDataLastAttempt"

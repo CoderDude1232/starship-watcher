@@ -1,6 +1,9 @@
 import Foundation
 
 struct SpaceXFallbackClient {
+    /// Prefixed onto flight IDs so backup records never collide with Launch Library IDs.
+    static let idPrefix = "spacex-"
+
     private let session: URLSession
     private let decoder: JSONDecoder
 
@@ -53,7 +56,7 @@ struct SpaceXFallbackClient {
 
 private extension StarshipFlight {
     init(spaceX launch: SpaceXLaunch) {
-        self.id = "spacex-\(launch.id)"
+        self.id = SpaceXFallbackClient.idPrefix + launch.id
         self.name = launch.name
         self.missionName = launch.name
         self.summary = launch.details?.cleanedSpaceXText ?? "SpaceX launch details are pending. This record is from the fallback SpaceXData source."
