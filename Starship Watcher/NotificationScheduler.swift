@@ -1,5 +1,8 @@
 import Foundation
 import UserNotifications
+#if canImport(ActivityKit)
+import ActivityKit
+#endif
 
 struct NotificationScheduler {
     func requestAuthorization() async -> Bool {
@@ -10,25 +13,22 @@ struct NotificationScheduler {
         }
     }
 
+    /// At most three reminders per launch: the day before, the Live Activity pin prompt (if enabled),
+    /// and webcast time. The Live Activity covers everything in between.
     func scheduleReminders(for flight: StarshipFlight) async {
         guard await requestAuthorization() else { return }
-        let center = UNUserNotificationCenter.current()
-        center.removePendingNotificationRequests(withIdentifiers: identifiers(for: flight))
+        // Only this scheduler uses local notifications. Clearing all also drops reminders left
+        // for a flight that is no longer next (slipped behind another, or a source ID change).
+        UNUserNotificationCenter.current().removeAllPendingNotificationRequests()
 
         schedule(title: "Starship launch tomorrow", body: flight.name, date: flight.launchDate?.addingTimeInterval(-24 * 60 * 60), identifier: "\(flight.id)-24h")
-        let liveLead = liveActivityLead
-        if liveLead != 6 * 60 * 60 {
-            schedule(title: "Starship launch in 6 hours", body: flight.name, date: flight.launchDate?.addingTimeInterval(-6 * 60 * 60), identifier: "\(flight.id)-6h")
-        }
-        if liveLead != 60 * 60 {
-            schedule(title: "Starship launch in 1 hour", body: flight.name, date: flight.launchDate?.addingTimeInterval(-60 * 60), identifier: "\(flight.id)-1h")
-        }
-        if let liveLead {
+        if let liveLead = liveActivityLead, !hasLiveActivity(for: flight) {
             // Opening the app from this starts the Live Activity if iOS didn't let it start in the background.
             let hours = Int(liveLead / 3600)
             schedule(title: "Starship launch in \(hours) hour\(hours == 1 ? "" : "s")", body: "Tap to pin the \(flight.name) countdown to your Lock Screen.", date: flight.launchDate?.addingTimeInterval(-liveLead), identifier: "\(flight.id)-live")
         }
-        schedule(title: "Starship launch window opening", body: "Check livestream availability for \(flight.name).", date: flight.windowStart ?? flight.launchDate?.addingTimeInterval(-30 * 60), identifier: "\(flight.id)-stream")
+        // Not `windowStart`: for Starship it usually equals NET, so the reminder landed at liftoff.
+        schedule(title: "Starship webcast starting soon", body: "\(flight.name) launches in about 30 minutes.", date: flight.launchDate?.addingTimeInterval(-30 * 60), identifier: "\(flight.id)-stream")
     }
 
     private func schedule(title: String, body: String, date: Date?, identifier: String) {
@@ -52,7 +52,11 @@ struct NotificationScheduler {
         #endif
     }
 
-    private func identifiers(for flight: StarshipFlight) -> [String] {
-        ["\(flight.id)-24h", "\(flight.id)-6h", "\(flight.id)-1h", "\(flight.id)-live", "\(flight.id)-stream"]
+    private func hasLiveActivity(for flight: StarshipFlight) -> Bool {
+        #if canImport(ActivityKit)
+        StarshipActivityController.liveActivities.contains { $0.attributes.flightID == flight.id }
+        #else
+        false
+        #endif
     }
 }

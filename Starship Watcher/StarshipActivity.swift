@@ -130,23 +130,42 @@ struct StarshipActivityController {
         }
     }
 
-    /// Lights up the Lock Screen when the status flips or the launch time moves.
-    private func alert(from old: StarshipFlightAttributes.ContentState, to new: StarshipFlightAttributes.ContentState, flightName: String) -> AlertConfiguration? {
-        let statusChanged = old.status != new.status
-        let timeMoved: Bool = switch (old.targetDate, new.targetDate) {
-        case let (oldDate?, newDate?): abs(oldDate.timeIntervalSince(newDate)) >= 60
-        case (nil, nil): false
-        default: true
-        }
-        guard statusChanged || timeMoved else { return nil }
+    /// Slips smaller than this update the countdown silently. Launch Library nudges NET often on
+    /// launch day, and corrects it to the real liftoff time afterwards.
+    static let alertSlipThreshold: TimeInterval = 15 * 60
+    /// Minimum gap between alerts, except for liftoff and the final result.
+    static let alertCooldown: TimeInterval = 15 * 60
+    private static let lastAlertKey = "liveActivityLastAlert"
 
-        let body = if new.targetDate == nil {
-            "Launch time is now TBD."
-        } else if timeMoved, let date = new.targetDate {
-            "New target: \(date.formatted(date: .abbreviated, time: .shortened))"
+    /// Lights up the Lock Screen only for changes worth a sound: hold/TBD, a real slip, liftoff, result.
+    /// Everything else updates the activity silently.
+    private func alert(from old: StarshipFlightAttributes.ContentState, to new: StarshipFlightAttributes.ContentState, flightName: String) -> AlertConfiguration? {
+        let oldKind = StatusKind(old.status)
+        let newKind = StatusKind(new.status)
+
+        let body: String
+        if newKind != oldKind, newKind.isFinal || newKind == .inFlight {
+            body = newKind == .inFlight ? "Liftoff!" : "Status: \(new.status)"
+        } else if new.targetDate == nil, old.targetDate != nil {
+            body = "Launch time is now TBD."
+        } else if newKind != oldKind, newKind == .hold || newKind == .tbd {
+            body = "Status: \(new.status)"
+        } else if newKind == .go, oldKind == .hold || oldKind == .tbd {
+            body = "Countdown resumed."
+        } else if !newKind.isAfterLiftoff, let oldDate = old.targetDate, let newDate = new.targetDate,
+                  oldDate > .now, abs(oldDate.timeIntervalSince(newDate)) >= Self.alertSlipThreshold {
+            body = "New target: \(newDate.formatted(date: .abbreviated, time: .shortened))"
         } else {
-            "Status: \(new.status)"
+            return nil
         }
+
+        let defaults = UserDefaults.standard
+        let urgent = newKind != oldKind && (newKind.isFinal || newKind == .inFlight)
+        if !urgent, let last = defaults.object(forKey: Self.lastAlertKey) as? Date,
+           Date.now.timeIntervalSince(last) < Self.alertCooldown {
+            return nil
+        }
+        defaults.set(Date.now, forKey: Self.lastAlertKey)
         return AlertConfiguration(title: "\(flightName) update", body: "\(body)", sound: .default)
     }
 
@@ -158,5 +177,25 @@ struct StarshipActivityController {
             detail: flight.padName
         )
     }
+}
+
+/// Launch Library status names bucketed for alert decisions ("Go for Launch", "On Hold", ...).
+private enum StatusKind {
+    case go, tbc, tbd, hold, inFlight, success, failure, other
+
+    init(_ status: String) {
+        let value = status.lowercased()
+        self = if value.contains("success") { .success }
+        else if value.contains("fail") { .failure }
+        else if value.contains("flight") || value.contains("progress") { .inFlight }
+        else if value.contains("hold") { .hold }
+        else if value.contains("determined") || value.contains("tbd") { .tbd }
+        else if value.contains("confirmed") || value.contains("tbc") { .tbc }
+        else if value.contains("go") { .go }
+        else { .other }
+    }
+
+    var isFinal: Bool { self == .success || self == .failure }
+    var isAfterLiftoff: Bool { self == .inFlight || isFinal }
 }
 #endif
