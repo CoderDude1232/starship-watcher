@@ -147,6 +147,19 @@ enum Countdown {
         }
         return String(format: "%@%02d:%02d:%02d", sign, hours, minutes, seconds)
     }
+
+    /// "in 70d 13h" for events other than liftoff, which keeps T± to itself.
+    static func relative(to target: Date, now: Date) -> String {
+        let remaining = max(Int(target.timeIntervalSince(now)), 0)
+        let days = remaining / 86_400
+        let hours = remaining / 3_600 % 24
+        let minutes = remaining / 60 % 60
+        let seconds = remaining % 60
+
+        if days > 0 { return "in \(days)d \(hours)h" }
+        if hours > 0 { return "in \(hours)h \(minutes)m" }
+        return "in \(minutes)m \(seconds)s"
+    }
 }
 
 // MARK: - Content surface

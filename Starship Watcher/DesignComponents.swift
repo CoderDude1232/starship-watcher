@@ -83,20 +83,29 @@ struct TelemetryItem: Identifiable {
     var systemImage: String? = nil
 }
 
+extension EnvironmentValues {
+    /// Settings > Display > High contrast: stronger telemetry labels and cells.
+    @Entry var highContrastTelemetry = false
+}
+
 /// A two-column instrument-panel readout. The 1pt gaps over a hairline background draw
-/// the grid lines, giving a flight-console feel.
+/// the grid lines, giving a flight-console feel. An odd last item spans both columns.
 struct TelemetryGrid: View {
     let items: [TelemetryItem]
 
-    private let columns = [
-        GridItem(.flexible(), spacing: 1),
-        GridItem(.flexible(), spacing: 1)
-    ]
+    private var rows: [[TelemetryItem]] {
+        stride(from: 0, to: items.count, by: 2).map { Array(items[$0..<min($0 + 2, items.count)]) }
+    }
 
     var body: some View {
-        LazyVGrid(columns: columns, spacing: 1) {
-            ForEach(items) { item in
-                TelemetryCell(item: item)
+        Grid(horizontalSpacing: 1, verticalSpacing: 1) {
+            ForEach(rows, id: \.first?.id) { row in
+                GridRow {
+                    ForEach(row) { item in
+                        TelemetryCell(item: item)
+                            .gridCellColumns(row.count == 1 ? 2 : 1)
+                    }
+                }
             }
         }
         .background(Theme.hairline)
@@ -110,6 +119,7 @@ struct TelemetryGrid: View {
 
 private struct TelemetryCell: View {
     let item: TelemetryItem
+    @Environment(\.highContrastTelemetry) private var highContrast
 
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
@@ -117,7 +127,7 @@ private struct TelemetryCell: View {
                 if let symbol = item.systemImage {
                     Image(systemName: symbol).font(.system(size: 9, weight: .bold))
                 }
-                Text(item.label).eyebrowStyle()
+                Text(item.label).eyebrowStyle(color: highContrast ? .white.opacity(0.92) : .secondary)
             }
             Text(item.value)
                 .font(.telemetry)
@@ -128,7 +138,7 @@ private struct TelemetryCell: View {
         .frame(maxWidth: .infinity, minHeight: 58, alignment: .leading)
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
-        .background(Theme.cell)
+        .background(highContrast ? Theme.cell.mix(with: .white, by: 0.06) : Theme.cell)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(item.label): \(item.value)")
     }
