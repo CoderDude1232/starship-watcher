@@ -10,37 +10,28 @@ struct ContentView: View {
     @AppStorage("activityLeadHours") private var activityLeadHours = 6
     @AppStorage("backendCacheURL") private var backendCacheURL = ""
     @Environment(\.scenePhase) private var scenePhase
-    @State private var selectedTab = AppTab.watch
-
-    private enum AppTab {
-        case watch, flights, mission, news, settings
-    }
 
     var body: some View {
-        TabView(selection: $selectedTab) {
+        TabView {
             WatchView(repository: repository, usesUTC: usesUTC)
                 .tabItem {
                     Label("Watch", systemImage: "binoculars.fill")
                 }
-                .tag(AppTab.watch)
 
             FlightsView(repository: repository, usesUTC: usesUTC)
                 .tabItem {
                     Label("Flights", systemImage: "list.bullet.rectangle")
                 }
-                .tag(AppTab.flights)
 
             MissionScreen(repository: repository, usesUTC: usesUTC)
                 .tabItem {
                     Label("Mission", systemImage: "point.3.connected.trianglepath.dotted")
                 }
-                .tag(AppTab.mission)
 
             NewsView(repository: newsRepository, imageURL: repository.nextFlight?.imageURL)
                 .tabItem {
                     Label("News", systemImage: "newspaper")
                 }
-                .tag(AppTab.news)
 
             SettingsView(
                 usesUTC: $usesUTC,
@@ -55,14 +46,8 @@ struct ContentView: View {
             .tabItem {
                 Label("Settings", systemImage: "gearshape")
             }
-            .tag(AppTab.settings)
         }
         .tabBarMinimizeBehavior(.onScrollDown)
-        .tabViewBottomAccessory(isEnabled: repository.nextFlight != nil) {
-            if let flight = repository.nextFlight {
-                CountdownAccessory(flight: flight) { selectedTab = .watch }
-            }
-        }
         .environment(\.highContrastTelemetry, highContrastTelemetry)
         .tint(.white)
         .task {
@@ -126,38 +111,6 @@ struct ContentView: View {
         }
         await syncLiveActivity()
         #endif
-    }
-}
-
-/// Glass capsule above the tab bar on every tab: next flight and a live countdown.
-private struct CountdownAccessory: View {
-    let flight: StarshipFlight
-    let action: () -> Void
-    @Environment(\.tabViewBottomAccessoryPlacement) private var placement
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 10) {
-                Text(flight.shortName)
-                    .font(.subheadline.weight(.heavy).width(.expanded))
-                    .textCase(.uppercase)
-                    .lineLimit(1)
-                Spacer(minLength: 8)
-                TimelineView(.periodic(from: .now, by: 1)) { timeline in
-                    Text(Countdown.text(to: flight.launchDate, now: timeline.date, compact: placement == .inline))
-                        .font(.countdownInline)
-                        .contentTransition(.numericText(countsDown: true))
-                        .lineLimit(1)
-                }
-            }
-            .foregroundStyle(.white)
-            .padding(.horizontal, 16)
-            .frame(maxHeight: .infinity)
-            .contentShape(.rect)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("\(flight.shortName) countdown")
-        .accessibilityHint("Shows the Watch tab")
     }
 }
 

@@ -67,8 +67,6 @@ extension Font {
     static let eyebrow = Font.caption2.weight(.semibold).width(.expanded)
     /// Hero countdown. Monospaced so the clock never shifts as digits tick.
     static let countdown = Font.system(size: 44, weight: .medium, design: .monospaced)
-    /// Countdown in the tab bar accessory.
-    static let countdownInline = Font.subheadline.weight(.semibold).monospaced()
     /// Telemetry readout values.
     static let telemetry = Font.subheadline.weight(.semibold).monospacedDigit()
 }
