@@ -41,8 +41,7 @@ struct ContentView: View {
                 activityLeadHours: $activityLeadHours,
                 backendCacheURL: $backendCacheURL,
                 dataSource: repository.activeSource,
-                lastUpdated: repository.lastUpdated,
-                imageURL: repository.nextFlight?.imageURL
+                lastUpdated: repository.lastUpdated
             )
             .tabItem {
                 Label("Settings", systemImage: "gearshape")
@@ -170,7 +169,7 @@ private struct HeroFlightView: View {
         VStack(alignment: .leading, spacing: 20) {
             VStack(alignment: .leading, spacing: 10) {
                 HStack {
-                    Text("Next Flight")
+                    Text("Next Starship Flight")
                         .eyebrowStyle(color: Theme.accent)
                     Spacer()
                     ShareLink(item: flight.shareText) {
@@ -180,8 +179,9 @@ private struct HeroFlightView: View {
                     }
                     .accessibilityLabel("Share flight")
                 }
-                Text(flight.name)
-                    .font(.largeTitle.bold())
+                Text(flight.shortName)
+                    .font(.missionTitle)
+                    .textCase(.uppercase)
                     .foregroundStyle(.white)
                     .lineLimit(3)
                     .fixedSize(horizontal: false, vertical: true)
@@ -208,9 +208,8 @@ private struct HeroFlightView: View {
                 )
             ])
         }
-        .padding(20)
+        .padding(.horizontal, 4)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .starshipGlass(cornerRadius: Theme.Radius.hero)
     }
 
     private func windowText(for flight: StarshipFlight) -> String {
@@ -230,7 +229,7 @@ private struct CountdownView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 8) {
                 Text(hasLaunched ? "Mission Elapsed" : "Countdown")
                     .eyebrowStyle(color: .white.opacity(0.7))
@@ -242,19 +241,11 @@ private struct CountdownView: View {
             TimelineView(.periodic(from: .now, by: 1)) { timeline in
                 Text(Countdown.text(to: targetDate, now: timeline.date))
                     .contentTransition(.numericText(countsDown: !hasLaunched))
-                    .font(.system(size: 38, weight: .bold))
-                    .monospacedDigit()
+                    .font(.countdown)
                     .foregroundStyle(.white)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.55)
-                    .frame(maxWidth: .infinity, minHeight: 74, alignment: .center)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 16)
-                    .background(.white.opacity(0.1), in: RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: Theme.Radius.sm, style: .continuous)
-                            .strokeBorder(.white.opacity(0.16), lineWidth: 1)
-                    }
+                    .minimumScaleFactor(0.5)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         .accessibilityElement(children: .combine)
@@ -291,7 +282,7 @@ private struct MissionSummaryView: View {
             ])
         }
         .padding(18)
-        .starshipGlass(cornerRadius: Theme.Radius.lg)
+        .starshipSurface(cornerRadius: Theme.Radius.lg)
     }
 }
 
@@ -361,8 +352,9 @@ private struct MainFlightCard: View {
                 Spacer()
                 StatusTag(status: flight.status)
             }
-            Text(flight.name)
-                .font(.title2.bold())
+            Text(flight.shortName)
+                .font(.missionHeadline)
+                .textCase(.uppercase)
                 .foregroundStyle(.white)
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
@@ -376,11 +368,17 @@ private struct MainFlightCard: View {
                 .lineLimit(4)
         }
         .padding(18)
-        .starshipGlass(cornerRadius: Theme.Radius.lg)
+        .starshipSurface(cornerRadius: Theme.Radius.lg)
     }
 }
 
 private extension StarshipFlight {
+    /// "Starship | Flight 15" -> "Flight 15". The vehicle is implied everywhere in this app.
+    var shortName: String {
+        guard let range = name.range(of: " | ") else { return name }
+        return String(name[range.upperBound...])
+    }
+
     var starshipFlightNumber: Int? {
         guard let range = name.range(of: #"(?:Flight|IFT)[\s-]*(\d+)"#, options: [.regularExpression, .caseInsensitive]) else {
             return nil
@@ -448,8 +446,9 @@ private struct ForecastCard: View {
                 MetaTag(text: "Speculative", tint: StatusTint.caution.color)
             }
 
-            Text("Starship Flight \(forecast.flightNumber)")
-                .font(.title2.bold())
+            Text("Flight \(forecast.flightNumber)")
+                .font(.missionHeadline)
+                .textCase(.uppercase)
                 .foregroundStyle(.white)
 
             TelemetryGrid(items: [
@@ -463,7 +462,7 @@ private struct ForecastCard: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(18)
-        .starshipGlass(cornerRadius: 22)
+        .starshipSurface(cornerRadius: 22)
         .accessibilityElement(children: .combine)
     }
 
@@ -493,7 +492,7 @@ private struct FlightSection: View {
                     .foregroundStyle(.white.opacity(0.6))
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(16)
-                    .starshipGlass(cornerRadius: Theme.Radius.md)
+                    .starshipSurface(cornerRadius: Theme.Radius.md)
             } else {
                 ForEach(flights) { flight in
                     NavigationLink {
@@ -516,12 +515,10 @@ private struct FlightRow: View {
         HStack(spacing: 14) {
             VStack(spacing: 2) {
                 Text(flight.launchDate?.formatted(.dateTime.month(.abbreviated)) ?? "TBD")
-                    .font(.caption2.weight(.bold))
-                    .textCase(.uppercase)
+                    .eyebrowStyle(color: Theme.accent)
                     .foregroundStyle(Theme.accent)
                 Text(flight.launchDate?.formatted(.dateTime.day()) ?? "--")
-                    .font(.title2.bold())
-                    .monospacedDigit()
+                    .font(.title2.weight(.semibold).monospaced())
                     .foregroundStyle(.white)
             }
             .frame(width: 58, height: 62)
@@ -533,8 +530,9 @@ private struct FlightRow: View {
 
             VStack(alignment: .leading, spacing: 6) {
                 HStack(alignment: .top) {
-                    Text(flight.name)
-                        .font(.subheadline.weight(.bold))
+                    Text(flight.shortName)
+                        .font(.subheadline.weight(.heavy).width(.expanded))
+                        .textCase(.uppercase)
                         .foregroundStyle(.white)
                         .lineLimit(2)
                     Spacer(minLength: 8)
@@ -550,7 +548,7 @@ private struct FlightRow: View {
             }
         }
         .padding(14)
-        .starshipGlass(cornerRadius: Theme.Radius.md)
+        .starshipSurface(cornerRadius: Theme.Radius.md)
     }
 }
 
@@ -570,8 +568,9 @@ private struct FlightDetailView: View {
                             StatusTag(status: flight.status)
                             MetaTag(text: flight.vehicle, systemImage: "airplane.departure")
                         }
-                        Text(flight.name)
-                            .font(.title.bold())
+                        Text(flight.shortName)
+                            .font(.missionTitle)
+                            .textCase(.uppercase)
                             .foregroundStyle(.white)
                             .lineLimit(3)
                             .fixedSize(horizontal: false, vertical: true)
@@ -582,7 +581,7 @@ private struct FlightDetailView: View {
                     }
                     .padding(18)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .starshipGlass(cornerRadius: Theme.Radius.lg)
+                    .starshipSurface(cornerRadius: Theme.Radius.lg)
 
                     TelemetryGrid(items: [
                         TelemetryItem(label: "Target", value: flight.launchDate.formattedLaunchDate(usesUTC: usesUTC), systemImage: "calendar"),
@@ -631,7 +630,7 @@ private struct FlightDetailView: View {
                         }
                     }
                     .padding(18)
-                    .starshipGlass(cornerRadius: 22)
+                    .starshipSurface(cornerRadius: 22)
                 }
                 .padding(20)
             }
@@ -792,7 +791,7 @@ private struct MissionTelemetryPanel: View {
         }
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .starshipGlass(cornerRadius: Theme.Radius.lg)
+        .starshipSurface(cornerRadius: Theme.Radius.lg)
     }
 }
 
@@ -803,8 +802,9 @@ private struct MissionHeaderView: View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Live Mission Sequence")
                 .eyebrowStyle(color: Theme.accent)
-            Text(flight.name)
-                .font(.title.bold())
+            Text(flight.shortName)
+                .font(.missionTitle)
+                .textCase(.uppercase)
                 .foregroundStyle(.white)
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
@@ -821,7 +821,7 @@ private struct MissionHeaderView: View {
         }
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .starshipGlass(cornerRadius: Theme.Radius.lg)
+        .starshipSurface(cornerRadius: Theme.Radius.lg)
     }
 }
 
@@ -886,12 +886,12 @@ private struct MissionEventRow: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
                     Text(event.title)
-                        .font(.subheadline.weight(.bold))
+                        .font(.subheadline.weight(.bold).width(.expanded))
                         .foregroundStyle(.white)
                         .lineLimit(2)
                     Spacer(minLength: 8)
                     Text(event.targetDate.formattedTime(usesUTC: usesUTC))
-                        .font(.caption.weight(.semibold))
+                        .font(.caption.weight(.semibold).monospacedDigit())
                         .foregroundStyle(.white.opacity(0.66))
                         .lineLimit(1)
                 }
@@ -904,15 +904,14 @@ private struct MissionEventRow: View {
 
                 HStack(spacing: 8) {
                     Text(state.label)
-                        .foregroundStyle(state.tint)
+                        .eyebrowStyle(color: state.tint)
                     Text(event.phase.rawValue)
-                        .foregroundStyle(.white.opacity(0.6))
+                        .eyebrowStyle(color: .white.opacity(0.6))
                 }
-                .font(.caption.weight(.black))
             }
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .starshipGlass(cornerRadius: 18)
+            .starshipSurface(cornerRadius: 18)
             .opacity(state.opacity)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -931,12 +930,6 @@ private struct NewsView: View {
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
-                        ScreenHeader(
-                            eyebrow: "Feed",
-                            title: "News",
-                            subtitle: "Latest Starship and SpaceX coverage from Spaceflight News."
-                        )
-
                         if let errorMessage = repository.errorMessage {
                             InlineNotice(message: errorMessage)
                         }
@@ -1017,7 +1010,7 @@ private struct NewsArticleRow: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .starshipGlass(cornerRadius: Theme.Radius.md)
+        .starshipSurface(cornerRadius: Theme.Radius.md)
     }
 }
 
@@ -1067,7 +1060,7 @@ private struct NewsArticleDetailView: View {
                     }
                     .padding(18)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .starshipGlass(cornerRadius: Theme.Radius.lg)
+                    .starshipSurface(cornerRadius: Theme.Radius.lg)
 
                     VStack(alignment: .leading, spacing: 12) {
                         SectionRule(title: "Story", symbol: "text.alignleft")
@@ -1086,7 +1079,7 @@ private struct NewsArticleDetailView: View {
                         .background(.white, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                     }
                     .padding(18)
-                    .starshipGlass(cornerRadius: 22)
+                    .starshipSurface(cornerRadius: 22)
 
                     if !relatedArticles.isEmpty {
                         VStack(alignment: .leading, spacing: 12) {
@@ -1124,7 +1117,7 @@ private struct EmptyNewsView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(24)
-        .starshipGlass(cornerRadius: 22)
+        .starshipSurface(cornerRadius: 22)
     }
 }
 
@@ -1137,66 +1130,59 @@ private struct SettingsView: View {
     @Binding var backendCacheURL: String
     let dataSource: String
     let lastUpdated: Date?
-    let imageURL: URL?
 
     var body: some View {
         NavigationStack {
-            ZStack {
-                FlightImageBackdrop(imageURL: imageURL)
-                    .ignoresSafeArea()
-
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 16) {
-                        ScreenHeader(
-                            eyebrow: "Configuration",
-                            title: "Settings",
-                            subtitle: "Tune alerts, countdowns, and display for how you follow launches."
-                        )
-
-                        SettingsPanel(title: "Time", symbol: "clock") {
-                            SettingsToggleRow(
-                                title: "Use UTC",
-                                subtitle: "Show launch windows and target times in coordinated universal time.",
-                                isOn: $usesUTC
-                            )
-                            SettingsPickerRow(title: "Live Activity starts", selection: $activityLeadHours)
-                        }
-
-                        SettingsPanel(title: "Alerts", symbol: "bell") {
-                            SettingsToggleRow(
-                                title: "Launch reminders",
-                                subtitle: "Notify before major countdown milestones and livestream windows.",
-                                isOn: $notificationsEnabled
-                            )
-                            SettingsToggleRow(
-                                title: "Live Activity",
-                                subtitle: "Pin the countdown to the Lock Screen automatically. Start it any time in the last 8h from the widget or Control Center.",
-                                isOn: $liveActivityEnabled
-                            )
-                        }
-
-                        SettingsPanel(title: "Display", symbol: "circle.lefthalf.filled") {
-                            SettingsToggleRow(
-                                title: "High contrast",
-                                subtitle: "Use stronger labels and telemetry contrast in flight views.",
-                                isOn: $highContrastTelemetry
-                            )
-                        }
-
-                        SettingsPanel(title: "Status", symbol: "checkmark.seal") {
-                            SettingsValueRow(title: "Last refreshed", value: lastUpdated.formattedLaunchDate(usesUTC: usesUTC))
-                            SettingsValueRow(title: "Offline backup", value: backupStatusText)
-                        }
-
-                        SettingsPanel(title: "About", symbol: "info.circle") {
-                            SettingsValueRow(title: "App", value: "Starship Watcher")
-                            SettingsValueRow(title: "Version", value: appVersion)
-                            SettingsValueRow(title: "Focus", value: "Starship flights and test events")
-                        }
+            Form {
+                Section {
+                    Toggle(isOn: $usesUTC) {
+                        Text("Use UTC")
+                        Text("Show launch windows and target times in coordinated universal time.")
                     }
-                    .padding(20)
+                    Picker("Live Activity starts", selection: $activityLeadHours) {
+                        Text("1h before").tag(1)
+                        Text("3h before").tag(3)
+                        Text("6h before").tag(6)
+                        Text("8h before").tag(8)
+                    }
+                    .tint(.white)
+                } header: {
+                    Text("Time")
+                } footer: {
+                    Text("iOS keeps a Live Activity for up to 8 hours, so it starts no earlier than T-8h.")
+                }
+
+                Section("Alerts") {
+                    Toggle(isOn: $notificationsEnabled) {
+                        Text("Launch reminders")
+                        Text("Notify before major countdown milestones and livestream windows.")
+                    }
+                    Toggle(isOn: $liveActivityEnabled) {
+                        Text("Live Activity")
+                        Text("Pin the countdown to the Lock Screen automatically. Start it any time in the last 8h from the widget or Control Center.")
+                    }
+                }
+
+                Section("Display") {
+                    Toggle(isOn: $highContrastTelemetry) {
+                        Text("High contrast")
+                        Text("Use stronger labels and telemetry contrast in flight views.")
+                    }
+                }
+
+                Section("Status") {
+                    LabeledContent("Last refreshed", value: lastUpdated.formattedLaunchDate(usesUTC: usesUTC))
+                    LabeledContent("Source", value: dataSource)
+                    LabeledContent("Offline backup", value: backupStatusText)
+                }
+
+                Section("About") {
+                    LabeledContent("Version", value: appVersion)
+                    LabeledContent("Focus", value: "Starship flights and test events")
                 }
             }
+            .formStyle(.grouped)
+            .tint(Color(.systemGreen))
             .navigationTitle("Settings")
         }
     }
@@ -1209,92 +1195,6 @@ private struct SettingsView: View {
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
         let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
         return "\(version) (\(build))"
-    }
-}
-
-private struct SettingsPanel<Content: View>: View {
-    let title: String
-    let symbol: String
-    @ViewBuilder let content: Content
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            SectionRule(title: title, symbol: symbol)
-            content
-        }
-        .padding(18)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .starshipGlass(cornerRadius: 20)
-    }
-}
-
-private struct SettingsToggleRow: View {
-    let title: String
-    let subtitle: String
-    @Binding var isOn: Bool
-
-    var body: some View {
-        Toggle(isOn: $isOn) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(title)
-                    .font(.subheadline.weight(.semibold))
-                Text(subtitle)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .tint(Color(.systemGreen))
-        .padding(12)
-        .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-    }
-}
-
-private struct SettingsPickerRow: View {
-    let title: String
-    @Binding var selection: Int
-
-    var body: some View {
-        HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(title)
-                    .font(.subheadline.weight(.semibold))
-                Text("iOS keeps a Live Activity for up to 8 hours, so it starts no earlier than T-8h.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Spacer(minLength: 8)
-            Picker(title, selection: $selection) {
-                Text("1h").tag(1)
-                Text("3h").tag(3)
-                Text("6h").tag(6)
-                Text("8h").tag(8)
-            }
-            .pickerStyle(.menu)
-            .tint(.white)
-        }
-        .padding(12)
-        .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-    }
-}
-
-private struct SettingsValueRow: View {
-    let title: String
-    let value: String
-
-    var body: some View {
-        HStack(alignment: .firstTextBaseline) {
-            Text(title)
-                .foregroundStyle(.secondary)
-            Spacer(minLength: 12)
-            Text(value)
-                .fontWeight(.semibold)
-                .multilineTextAlignment(.trailing)
-        }
-        .font(.subheadline)
-        .padding(12)
-        .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 }
 
@@ -1453,7 +1353,7 @@ private struct InlineNotice: View {
             .fixedSize(horizontal: false, vertical: true)
             .padding()
             .frame(maxWidth: .infinity, alignment: .leading)
-            .starshipGlass(cornerRadius: Theme.Radius.md)
+            .starshipSurface(cornerRadius: Theme.Radius.md)
     }
 }
 
@@ -1511,7 +1411,7 @@ private struct EmptyFlightView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(24)
-        .starshipGlass(cornerRadius: 22)
+        .starshipSurface(cornerRadius: 22)
     }
 }
 

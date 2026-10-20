@@ -36,18 +36,39 @@ enum Theme {
     /// read as "engineered" rather than a stack of translucent cards.
     static let hairline = Color.white.opacity(0.14)
 
+    /// Flat content surface: near-black with a cool bias, opaque enough to read over the photo.
+    static let surface = Color(red: 0.04, green: 0.045, blue: 0.06).opacity(0.82)
+
     /// The app's single accent, used sparingly for the active/live state.
     static let accent = Color(red: 0.42, green: 0.68, blue: 1.0)
 }
 
 extension View {
-    /// Small caption label used above titles and as field labels. Uses a standard Apple
-    /// text style so it never reads as a custom "designed" font.
+    /// Small uppercase label used above titles and as field labels. Expanded width and
+    /// tracking give it the instrument-panel voice; values below it stay in standard SF.
     func eyebrowStyle(color: Color = .secondary) -> some View {
         self
-            .font(.caption.weight(.semibold))
+            .font(.eyebrow)
+            .textCase(.uppercase)
+            .tracking(0.8)
             .foregroundStyle(color)
     }
+}
+
+// MARK: - Type
+
+extension Font {
+    /// Display face: SF Pro Expanded. Reserved for flight names and screen-level titles.
+    static let missionTitle = Font.title.weight(.black).width(.expanded)
+    /// Secondary display size for card and row titles.
+    static let missionHeadline = Font.title3.weight(.heavy).width(.expanded)
+    /// Section rule titles.
+    static let sectionTitle = Font.footnote.weight(.bold).width(.expanded)
+    static let eyebrow = Font.caption2.weight(.semibold).width(.expanded)
+    /// Hero countdown. Monospaced so the clock never shifts as digits tick.
+    static let countdown = Font.system(size: 44, weight: .medium, design: .monospaced)
+    /// Telemetry readout values.
+    static let telemetry = Font.subheadline.weight(.semibold).monospacedDigit()
 }
 
 /// Semantic launch-status colors. Previously every status rendered white, which made
@@ -115,44 +136,26 @@ enum Countdown {
         let minutes = remaining / 60 % 60
         let seconds = remaining % 60
 
-        if days >= 10 {
-            return String(format: "%@%dD %02dH", sign, days, hours)
-        }
         if days > 0 {
             return compact
                 ? String(format: "%@%dD %02d:%02d", sign, days, hours, minutes)
-                : String(format: "%@%dD %02d:%02d:%02d", sign, days, hours, minutes, seconds)
+                : String(format: "%@%d:%02d:%02d:%02d", sign, days, hours, minutes, seconds)
         }
         return String(format: "%@%02d:%02d:%02d", sign, hours, minutes, seconds)
     }
 }
 
-// MARK: - Glass surface
+// MARK: - Content surface
 
 extension View {
-    /// The signature translucent card surface. Uses Liquid Glass on iOS 26+, with a
-    /// refined material fallback, plus a soft shadow for depth on every OS.
-    @ViewBuilder
-    func starshipGlass(cornerRadius: CGFloat) -> some View {
-        if #available(iOS 26.0, *) {
-            self
-                .glassEffect(.regular, in: .rect(cornerRadius: cornerRadius))
-                .shadow(color: .black.opacity(0.28), radius: 14, x: 0, y: 8)
-        } else {
-            self
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-                .overlay {
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .strokeBorder(
-                            LinearGradient(
-                                colors: [.white.opacity(0.28), .white.opacity(0.06)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            lineWidth: 1
-                        )
-                }
-                .shadow(color: .black.opacity(0.28), radius: 14, x: 0, y: 8)
-        }
+    /// Flat card surface for content. Liquid Glass is reserved for the navigation and
+    /// controls layer (tab bar, toolbars, buttons); glass on content fights it.
+    func starshipSurface(cornerRadius: CGFloat) -> some View {
+        self
+            .background(Theme.surface, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .strokeBorder(Theme.hairline, lineWidth: 1)
+            }
     }
 }

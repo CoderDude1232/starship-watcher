@@ -11,6 +11,14 @@ import SwiftUI
 struct Starship_WatcherApp: App {
     @Environment(\.scenePhase) private var scenePhase
 
+    init() {
+        // Navigation titles share the SF Pro Expanded display face used in-app.
+        let largeTitle = UIFont.systemFont(ofSize: 30, weight: .black, width: .expanded)
+        let inlineTitle = UIFont.systemFont(ofSize: 15, weight: .bold, width: .expanded)
+        UINavigationBar.appearance().largeTitleTextAttributes = [.font: largeTitle, .kern: 0.5]
+        UINavigationBar.appearance().titleTextAttributes = [.font: inlineTitle, .kern: 1.0]
+    }
+
     var body: some Scene {
         WindowGroup {
             ContentView()
