@@ -10,28 +10,37 @@ struct ContentView: View {
     @AppStorage("activityLeadHours") private var activityLeadHours = 6
     @AppStorage("backendCacheURL") private var backendCacheURL = ""
     @Environment(\.scenePhase) private var scenePhase
+    @State private var selectedTab = AppTab.watch
+
+    private enum AppTab {
+        case watch, flights, mission, news, settings
+    }
 
     var body: some View {
-        TabView {
+        TabView(selection: $selectedTab) {
             WatchView(repository: repository, usesUTC: usesUTC)
                 .tabItem {
                     Label("Watch", systemImage: "binoculars.fill")
                 }
+                .tag(AppTab.watch)
 
             FlightsView(repository: repository, usesUTC: usesUTC)
                 .tabItem {
                     Label("Flights", systemImage: "list.bullet.rectangle")
                 }
+                .tag(AppTab.flights)
 
             MissionScreen(repository: repository, usesUTC: usesUTC)
                 .tabItem {
                     Label("Mission", systemImage: "point.3.connected.trianglepath.dotted")
                 }
+                .tag(AppTab.mission)
 
             NewsView(repository: newsRepository, imageURL: repository.nextFlight?.imageURL)
                 .tabItem {
                     Label("News", systemImage: "newspaper")
                 }
+                .tag(AppTab.news)
 
             SettingsView(
                 usesUTC: $usesUTC,
@@ -46,7 +55,15 @@ struct ContentView: View {
             .tabItem {
                 Label("Settings", systemImage: "gearshape")
             }
+            .tag(AppTab.settings)
         }
+        .tabBarMinimizeBehavior(.onScrollDown)
+        .tabViewBottomAccessory(isEnabled: repository.nextFlight != nil) {
+            if let flight = repository.nextFlight {
+                CountdownAccessory(flight: flight) { selectedTab = .watch }
+            }
+        }
+        .environment(\.highContrastTelemetry, highContrastTelemetry)
         .tint(.white)
         .task {
             // Live Activities cap at 8h; older builds offered longer lead times.
@@ -112,6 +129,38 @@ struct ContentView: View {
     }
 }
 
+/// Glass capsule above the tab bar on every tab: next flight and a live countdown.
+private struct CountdownAccessory: View {
+    let flight: StarshipFlight
+    let action: () -> Void
+    @Environment(\.tabViewBottomAccessoryPlacement) private var placement
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                Text(flight.shortName)
+                    .font(.subheadline.weight(.heavy).width(.expanded))
+                    .textCase(.uppercase)
+                    .lineLimit(1)
+                Spacer(minLength: 8)
+                TimelineView(.periodic(from: .now, by: 1)) { timeline in
+                    Text(Countdown.text(to: flight.launchDate, now: timeline.date, compact: placement == .inline))
+                        .font(.countdownInline)
+                        .contentTransition(.numericText(countsDown: true))
+                        .lineLimit(1)
+                }
+            }
+            .foregroundStyle(.white)
+            .padding(.horizontal, 16)
+            .frame(maxHeight: .infinity)
+            .contentShape(.rect)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(flight.shortName) countdown")
+        .accessibilityHint("Shows the Watch tab")
+    }
+}
+
 private struct WatchView: View {
     let repository: FlightRepository
     let usesUTC: Bool
@@ -155,6 +204,16 @@ private struct WatchView: View {
                 }
             }
             .navigationTitle("Starship Watcher")
+            .toolbar {
+                if let flight = repository.nextFlight {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        ShareLink(item: flight.shareText) {
+                            Image(systemName: "square.and.arrow.up")
+                        }
+                        .accessibilityLabel("Share flight")
+                    }
+                }
+            }
             .refreshingToolbar(isLoading: repository.isLoading)
             .sensoryFeedback(.success, trigger: repository.lastUpdated)
         }
@@ -168,17 +227,8 @@ private struct HeroFlightView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    Text("Next Starship Flight")
-                        .eyebrowStyle(color: Theme.accent)
-                    Spacer()
-                    ShareLink(item: flight.shareText) {
-                        Image(systemName: "square.and.arrow.up")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.8))
-                    }
-                    .accessibilityLabel("Share flight")
-                }
+                Text("Next Starship Flight")
+                    .eyebrowStyle(color: Theme.accent)
                 Text(flight.shortName)
                     .font(.missionTitle)
                     .textCase(.uppercase)
@@ -188,25 +238,20 @@ private struct HeroFlightView: View {
                 HStack(spacing: 8) {
                     StatusTag(status: flight.status)
                     MetaTag(text: flight.launchSite, systemImage: "mappin.and.ellipse")
-                    if flight.webcastLive {
+                    if flight.isLive() {
                         MetaTag(text: "Live", systemImage: "dot.radiowaves.left.and.right", tint: StatusTint.failure.color)
                     }
                 }
             }
 
-            CountdownView(targetDate: flight.launchDate)
+            CountdownView(targetDate: flight.launchDate, inActiveWindow: flight.isInActiveWindow())
 
             TelemetryGrid(items: [
                 TelemetryItem(label: "Vehicle", value: flight.vehicle, systemImage: "airplane.departure"),
                 TelemetryItem(label: "Window", value: windowText(for: flight), systemImage: "clock"),
                 TelemetryItem(label: "Pad", value: flight.padName, systemImage: "scope"),
-                TelemetryItem(
-                    label: "Probability",
-                    value: flight.probability.map { "\($0)%" } ?? "—",
-                    tint: flight.probability != nil ? StatusTint.go.color : .white,
-                    systemImage: "percent"
-                )
-            ])
+                flight.probabilityItem
+            ].compactMap { $0 })
         }
         .padding(.horizontal, 4)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -216,12 +261,17 @@ private struct HeroFlightView: View {
         guard let start = flight.windowStart, let end = flight.windowEnd else {
             return flight.launchDate.formattedLaunchDate(usesUTC: usesUTC)
         }
+        // Instantaneous window: one time, not "10:00 am-10:00 am".
+        if abs(end.timeIntervalSince(start)) < 60 {
+            return start.formattedTime(usesUTC: usesUTC)
+        }
         return "\(start.formattedTime(usesUTC: usesUTC))-\(end.formattedTime(usesUTC: usesUTC))"
     }
 }
 
 private struct CountdownView: View {
     let targetDate: Date?
+    let inActiveWindow: Bool
 
     private var hasLaunched: Bool {
         guard let targetDate else { return false }
@@ -234,7 +284,7 @@ private struct CountdownView: View {
                 Text(hasLaunched ? "Mission Elapsed" : "Countdown")
                     .eyebrowStyle(color: .white.opacity(0.7))
                 Spacer()
-                if hasLaunched {
+                if hasLaunched && inActiveWindow {
                     MetaTag(text: "Live", systemImage: "dot.radiowaves.left.and.right", tint: StatusTint.inFlight.color)
                 }
             }
@@ -269,17 +319,12 @@ private struct MissionSummaryView: View {
                 TelemetryItem(label: "Pad", value: "\(flight.padName), \(flight.launchSite)", systemImage: "mappin.and.ellipse"),
                 TelemetryItem(
                     label: "Webcast",
-                    value: flight.webcastLive ? "Live" : "Standby",
-                    tint: flight.webcastLive ? StatusTint.failure.color : .white,
+                    value: flight.isLive() ? "Live" : "Standby",
+                    tint: flight.isLive() ? StatusTint.failure.color : .white,
                     systemImage: "antenna.radiowaves.left.and.right"
                 ),
-                TelemetryItem(
-                    label: "Probability",
-                    value: flight.probability.map { "\($0)%" } ?? "—",
-                    tint: flight.probability != nil ? StatusTint.go.color : .white,
-                    systemImage: "percent"
-                )
-            ])
+                flight.probabilityItem
+            ].compactMap { $0 })
         }
         .padding(18)
         .starshipSurface(cornerRadius: Theme.Radius.lg)
@@ -386,6 +431,21 @@ private extension StarshipFlight {
         let match = String(name[range])
         let digits = match.filter(\.isNumber)
         return Int(digits)
+    }
+
+    /// T-3h to T+2h around NET: when the Mission tab polls and anything may be called live.
+    func isInActiveWindow(now: Date = .now) -> Bool {
+        guard let launchDate else { return false }
+        return now >= launchDate.addingTimeInterval(-3 * 60 * 60) && now <= launchDate.addingTimeInterval(2 * 60 * 60)
+    }
+
+    func isLive(now: Date = .now) -> Bool {
+        webcastLive && isInActiveWindow(now: now)
+    }
+
+    /// Nil when Launch Library has no probability, so the cell is hidden rather than "—".
+    var probabilityItem: TelemetryItem? {
+        probability.map { TelemetryItem(label: "Probability", value: "\($0)%", tint: StatusTint.go.color, systemImage: "percent") }
     }
 
     var shareText: String {
@@ -595,21 +655,23 @@ private struct FlightDetailView: View {
                         )
                     ])
 
-                    HStack(spacing: 12) {
+                    // Stacked: side by side, "SpaceX Launches" truncates at large size.
+                    VStack(spacing: 10) {
                         if let sourceURL = flight.sourceURL {
                             Link(destination: sourceURL) {
-                                Label(flight.webcastLive ? "Watch Live" : "Open Source", systemImage: flight.webcastLive ? "play.rectangle.fill" : "safari")
+                                Label(flight.isLive() ? "Watch Live" : "Open Source", systemImage: flight.isLive() ? "play.rectangle.fill" : "safari")
                                     .frame(maxWidth: .infinity)
                             }
-                            .buttonStyle(.bordered)
+                            .buttonStyle(.glassProminent)
+                            .tint(Theme.accent)
                         }
                         Link(destination: URL(string: "https://www.spacex.com/launches")!) {
                             Label("SpaceX Launches", systemImage: "paperplane.fill")
                                 .frame(maxWidth: .infinity)
                         }
-                        .buttonStyle(.bordered)
+                        .buttonStyle(.glass)
                     }
-                    .tint(.white)
+                    .controlSize(.large)
 
                     MissionSummaryView(flight: flight, usesUTC: usesUTC)
 
@@ -725,9 +787,7 @@ private struct MissionScreen: View {
     }
 
     private var shouldRefreshLiveMission: Bool {
-        guard let launchDate = flight?.launchDate else { return false }
-        let now = Date()
-        return now >= launchDate.addingTimeInterval(-3 * 60 * 60) && now <= launchDate.addingTimeInterval(2 * 60 * 60)
+        flight?.isInActiveWindow() ?? false
     }
 
 }
@@ -781,7 +841,7 @@ private struct MissionTelemetryPanel: View {
                             label: "Event In",
                             value: next.flatMap { event in
                                 guard let target = event.targetDate else { return nil }
-                                return target <= now ? "Holding" : Countdown.text(to: target, now: now)
+                                return target <= now ? "Holding" : Countdown.relative(to: target, now: now)
                             } ?? "—",
                             systemImage: "timer"
                         )
@@ -800,7 +860,7 @@ private struct MissionHeaderView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Live Mission Sequence")
+            Text(flight.isInActiveWindow() ? "Live Mission Sequence" : "Planned Sequence")
                 .eyebrowStyle(color: Theme.accent)
             Text(flight.shortName)
                 .font(.missionTitle)
@@ -814,7 +874,7 @@ private struct MissionHeaderView: View {
                 .fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 8) {
                 StatusTag(status: flight.status)
-                if flight.webcastLive {
+                if flight.isLive() {
                     MetaTag(text: "Live Webcast", systemImage: "play.rectangle.fill", tint: StatusTint.failure.color)
                 }
             }
@@ -1072,11 +1132,10 @@ private struct NewsArticleDetailView: View {
                             Label("Read Full Article", systemImage: "safari")
                                 .font(.headline)
                                 .frame(maxWidth: .infinity)
-                                .padding(.vertical, 12)
                         }
-                        .buttonStyle(CardButtonStyle())
-                        .foregroundStyle(.black)
-                        .background(.white, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .buttonStyle(.glassProminent)
+                        .controlSize(.large)
+                        .tint(Theme.accent)
                     }
                     .padding(18)
                     .starshipSurface(cornerRadius: 22)
