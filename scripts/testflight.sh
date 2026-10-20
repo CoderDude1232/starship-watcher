@@ -2,8 +2,8 @@
 # Bumps the build number, archives a Release build and uploads it to TestFlight.
 # Commits the bump locally on success; push it / open a PR yourself.
 #
-#   scripts/testflight.sh          # next build number (current + 1)
-#   scripts/testflight.sh 20       # explicit build number
+#   scripts/testflight.sh          # build number = upload time, YYMMDDHHMM
+#   scripts/testflight.sh 2611011200  # explicit build number
 #   DRY_RUN=1 scripts/testflight.sh  # bump + archive only, then restore the project file
 #
 # Needs Xcode signed in to an account on team HK396F3767 (Settings > Accounts).
@@ -27,7 +27,9 @@ if (( ${#current} != 1 )); then
   echo "Targets have different build numbers: ${current[*]}" >&2
   exit 1
 fi
-next=${1:-$(( current[1] + 1 ))}
+# Timestamps match builds already in TestFlight (e.g. 2610192004). TestFlight shows the
+# highest number as latest, so small sequential numbers would sort below them.
+next=${1:-$(date +%y%m%d%H%M)}
 if (( next <= current[1] )); then
   echo "Build $next must be greater than current $current[1]." >&2
   exit 1
