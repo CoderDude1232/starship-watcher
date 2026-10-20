@@ -47,7 +47,6 @@ struct ContentView: View {
                 Label("Settings", systemImage: "gearshape")
             }
         }
-        .tabBarMinimizeBehavior(.onScrollDown)
         .environment(\.highContrastTelemetry, highContrastTelemetry)
         .tint(.white)
         .task {
