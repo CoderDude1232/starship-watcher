@@ -39,6 +39,10 @@ enum Theme {
     /// Flat content surface: near-black with a cool bias, opaque enough to read over the photo.
     static let surface = Color(red: 0.04, green: 0.045, blue: 0.06).opacity(0.82)
 
+    /// Opaque fill for telemetry cells. The grid's hairline background shows through any
+    /// translucent fill, which read as a white glass panel over the photo.
+    static let cell = Color(red: 0.06, green: 0.065, blue: 0.08)
+
     /// The app's single accent, used sparingly for the active/live state.
     static let accent = Color(red: 0.42, green: 0.68, blue: 1.0)
 }

@@ -138,7 +138,7 @@ private struct TelemetryCell: View {
         .frame(maxWidth: .infinity, minHeight: 58, alignment: .leading)
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
-        .background(Color.white.opacity(highContrast ? 0.1 : 0.045))
+        .background(highContrast ? Theme.cell.mix(with: .white, by: 0.06) : Theme.cell)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(item.label): \(item.value)")
     }
