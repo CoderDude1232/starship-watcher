@@ -60,7 +60,9 @@ struct SectionRule: View {
                     Image(systemName: symbol)
                 }
             }
-            .font(.headline)
+            .font(.sectionTitle)
+            .textCase(.uppercase)
+            .tracking(1.0)
             .foregroundStyle(.white)
             .fixedSize()
 
@@ -118,7 +120,7 @@ private struct TelemetryCell: View {
                 Text(item.label).eyebrowStyle()
             }
             Text(item.value)
-                .font(.subheadline.weight(.semibold))
+                .font(.telemetry)
                 .foregroundStyle(item.tint)
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)
@@ -126,7 +128,7 @@ private struct TelemetryCell: View {
         .frame(maxWidth: .infinity, minHeight: 58, alignment: .leading)
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
-        .background(Color.white.opacity(0.045))
+        .background(Theme.cell)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(item.label): \(item.value)")
     }
@@ -224,33 +226,8 @@ struct SkeletonCard: View {
         }
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .starshipGlass(cornerRadius: Theme.Radius.lg)
+        .starshipSurface(cornerRadius: Theme.Radius.lg)
         .accessibilityLabel("Loading")
-    }
-}
-
-/// Consistent screen header: accent eyebrow, expanded display title, muted subtitle.
-struct ScreenHeader: View {
-    var eyebrow: String
-    var title: String
-    var subtitle: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(eyebrow).eyebrowStyle(color: Theme.accent)
-            Text(title)
-                .font(.largeTitle.bold())
-                .foregroundStyle(.white)
-            Text(subtitle)
-                .font(.footnote)
-                .foregroundStyle(.white.opacity(0.6))
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(18)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .starshipGlass(cornerRadius: Theme.Radius.lg)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(title)
     }
 }
 
@@ -268,7 +245,7 @@ struct NewsSkeletonRow: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .starshipGlass(cornerRadius: Theme.Radius.md)
+        .starshipSurface(cornerRadius: Theme.Radius.md)
         .accessibilityLabel("Loading")
     }
 }
