@@ -24,7 +24,7 @@ struct LaunchLibraryClient {
 
     /// One request for upcoming, plus one for previous when `includePrevious` is set.
     func fetchStarshipFlights(includePrevious: Bool = true) async throws -> [StarshipFlight] {
-        async let upcoming = fetch(path: "launch/upcoming/", ordering: "net")
+        async let upcoming = fetch(path: "launch/upcoming/", ordering: "net", detailed: true)
         async let previous = includePrevious ? fetch(path: "launch/previous/", ordering: "-net") : []
         let combined = try await upcoming + previous
 
@@ -48,13 +48,17 @@ struct LaunchLibraryClient {
             }
     }
 
-    private func fetch(path: String, ordering: String) async throws -> [LaunchLibraryLaunch] {
+    /// `detailed` adds `vidURLs`, which the default list mode omits.
+    private func fetch(path: String, ordering: String, detailed: Bool = false) async throws -> [LaunchLibraryLaunch] {
         var components = URLComponents(string: "https://ll.thespacedevs.com/2.0.0/\(path)")!
         components.queryItems = [
             URLQueryItem(name: "search", value: "Starship"),
             URLQueryItem(name: "limit", value: "20"),
             URLQueryItem(name: "ordering", value: ordering)
         ]
+        if detailed {
+            components.queryItems?.append(URLQueryItem(name: "mode", value: "detailed"))
+        }
 
         guard let url = components.url else { return [] }
         var request = URLRequest(url: url)
@@ -92,6 +96,10 @@ private extension StarshipFlight {
         self.imageURL = response.image
         self.webcastLive = response.webcastLive ?? false
         self.sourceURL = response.url
+        self.webcastURL = response.vidURLs?.min { ($0.priority ?? .max) < ($1.priority ?? .max) }?.url
+        if let tbdDate = response.tbdDate, let tbdTime = response.tbdTime {
+            self.hasExactTime = !tbdDate && !tbdTime
+        }
     }
 }
 
@@ -113,6 +121,9 @@ private struct LaunchLibraryLaunch: Decodable {
     let pad: LaunchLibraryPad?
     let webcastLive: Bool?
     let image: URL?
+    let tbdDate: Bool?
+    let tbdTime: Bool?
+    let vidURLs: [LaunchLibraryVideo]?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -128,7 +139,15 @@ private struct LaunchLibraryLaunch: Decodable {
         case pad
         case webcastLive = "webcast_live"
         case image
+        case tbdDate = "tbddate"
+        case tbdTime = "tbdtime"
+        case vidURLs
     }
+}
+
+private struct LaunchLibraryVideo: Decodable {
+    let url: URL
+    let priority: Int?
 }
 
 private struct LaunchLibraryStatus: Decodable {
