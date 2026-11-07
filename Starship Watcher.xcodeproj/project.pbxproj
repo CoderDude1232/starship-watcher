@@ -50,6 +50,16 @@
 			);
 			target = ECA901FE3010BAF1001F32AB /* Starship Watcher */;
 		};
+		ECB1A0023010D000002BFC39 /* Exceptions for "Starship Watcher" folder in "WidgetExtensionExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				FlightCache.swift,
+				FlightModels.swift,
+				LaunchLibraryClient.swift,
+				SharedAppGroup.swift,
+			);
+			target = ECFE078E3010C372002BFC39 /* WidgetExtensionExtension */;
+		};
 		ECFE07AA3010C374002BFC39 /* Exceptions for "WidgetExtension" folder in "WidgetExtensionExtension" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
@@ -64,6 +74,7 @@
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
 				ECB1A0013010D000002BFC39 /* Exceptions for "Starship Watcher" folder in "Starship Watcher" target */,
+				ECB1A0023010D000002BFC39 /* Exceptions for "Starship Watcher" folder in "WidgetExtensionExtension" target */,
 			);
 			path = "Starship Watcher";
 			sourceTree = "<group>";

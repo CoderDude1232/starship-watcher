@@ -16,10 +16,22 @@ struct StarshipFlight: Identifiable, Codable, Hashable {
     let imageURL: URL?
     let webcastLive: Bool
     let sourceURL: URL?
+    /// Best stream from Launch Library. Upcoming flights only; nil until a stream is listed.
+    var webcastURL: URL? = nil
+    /// False when Launch Library marks the date or time as a placeholder. Nil means unknown.
+    var hasExactTime: Bool? = nil
 
     var isUpcoming: Bool {
         guard let launchDate else { return true }
         return launchDate >= .now.addingTimeInterval(-6 * 60 * 60)
+    }
+
+    /// Worth a ticking clock: confirmed Go, already flown, or an exact time with a date set.
+    /// Otherwise the date is a placeholder (e.g. "To Be Determined", NET midnight UTC).
+    var hasFirmDate: Bool {
+        guard launchDate != nil else { return false }
+        if status.isGo || status.confirmsLiftoff { return true }
+        return !status.isTBD && hasExactTime != false
     }
 
     var timeline: [FlightEvent] {
@@ -52,6 +64,14 @@ struct StarshipFlight: Identifiable, Codable, Hashable {
     }
 }
 
+extension Array where Element == StarshipFlight {
+    var nextFlight: StarshipFlight? {
+        filter(\.isUpcoming)
+            .sorted { ($0.launchDate ?? .distantFuture) < ($1.launchDate ?? .distantFuture) }
+            .first
+    }
+}
+
 struct LaunchStatus: Codable, Hashable {
     let name: String
 
@@ -78,10 +98,20 @@ struct LaunchStatus: Codable, Hashable {
         return value.contains("flight") || value.contains("progress") || value.contains("success") || value.contains("fail")
     }
 
+    /// Launch Library: "Go for Launch".
+    var isGo: Bool {
+        name.lowercased().hasPrefix("go")
+    }
+
+    /// Launch Library: "To Be Determined".
+    var isTBD: Bool {
+        let value = name.lowercased()
+        return value.contains("determined") || value.contains("tbd")
+    }
+
     /// Launch Library: "On Hold", "To Be Determined".
     var isHoldOrTBD: Bool {
-        let value = name.lowercased()
-        return value.contains("hold") || value.contains("determined") || value.contains("tbd")
+        isTBD || name.lowercased().contains("hold")
     }
 }
 

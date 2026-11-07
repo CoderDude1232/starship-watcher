@@ -8,7 +8,6 @@ struct ContentView: View {
     @AppStorage("liveActivityEnabled") private var liveActivityEnabled = true
     @AppStorage("highContrastTelemetry") private var highContrastTelemetry = false
     @AppStorage("activityLeadHours") private var activityLeadHours = 6
-    @AppStorage("backendCacheURL") private var backendCacheURL = ""
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
@@ -39,8 +38,6 @@ struct ContentView: View {
                 liveActivityEnabled: $liveActivityEnabled,
                 highContrastTelemetry: $highContrastTelemetry,
                 activityLeadHours: $activityLeadHours,
-                backendCacheURL: $backendCacheURL,
-                dataSource: repository.activeSource,
                 lastUpdated: repository.lastUpdated
             )
             .tabItem {
@@ -131,12 +128,9 @@ private struct WatchView: View {
                         } else if let flight = repository.nextFlight {
                             HeroFlightView(flight: flight, usesUTC: usesUTC)
                                 .transition(.opacity)
-                            if let warning = repository.sourceWarningMessage {
-                                DataWarningBanner(message: warning)
-                            }
                             MissionSummaryView(flight: flight, usesUTC: usesUTC)
                         } else {
-                            EmptyFlightView()
+                            EmptyFlightView(repository: repository)
                         }
 
                         if let errorMessage = repository.errorMessage {
@@ -144,7 +138,7 @@ private struct WatchView: View {
                         }
 
                         if !repository.isFirstLoad {
-                            LastUpdatedFooter(date: repository.lastUpdated, source: repository.activeSource, usesUTC: usesUTC)
+                            LastUpdatedFooter(date: repository.lastUpdated)
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -303,11 +297,9 @@ private struct FlightsView: View {
                             SkeletonCard(lines: 3)
                             SkeletonCard(lines: 2)
                             SkeletonCard(lines: 2)
+                        } else if repository.flights.isEmpty {
+                            EmptyFlightView(repository: repository)
                         } else {
-                            if let warning = repository.sourceWarningMessage {
-                                DataWarningBanner(message: warning)
-                            }
-
                             if let nextFlight = repository.nextFlight {
                                 NavigationLink {
                                     FlightDetailView(flight: nextFlight, usesUTC: usesUTC)
@@ -682,10 +674,6 @@ private struct MissionScreen: View {
                         } else if let flight {
                             MissionHeaderView(flight: flight)
 
-                            if let warning = repository.sourceWarningMessage {
-                                DataWarningBanner(message: warning)
-                            }
-
                             MissionTelemetryPanel(flight: flight)
 
                             VStack(alignment: .leading, spacing: 14) {
@@ -705,7 +693,7 @@ private struct MissionScreen: View {
                                 }
                             }
                         } else {
-                            EmptyFlightView()
+                            EmptyFlightView(repository: repository)
                         }
                     }
                     .padding(.horizontal, 20)
@@ -1138,8 +1126,6 @@ private struct SettingsView: View {
     @Binding var liveActivityEnabled: Bool
     @Binding var highContrastTelemetry: Bool
     @Binding var activityLeadHours: Int
-    @Binding var backendCacheURL: String
-    let dataSource: String
     let lastUpdated: Date?
 
     var body: some View {
@@ -1183,8 +1169,6 @@ private struct SettingsView: View {
 
                 Section("Status") {
                     LabeledContent("Last refreshed", value: lastUpdated.formattedLaunchDate(usesUTC: usesUTC))
-                    LabeledContent("Source", value: dataSource)
-                    LabeledContent("Offline backup", value: backupStatusText)
                 }
 
                 Section("About") {
@@ -1196,10 +1180,6 @@ private struct SettingsView: View {
             .tint(Color(.systemGreen))
             .navigationTitle("Settings")
         }
-    }
-
-    private var backupStatusText: String {
-        backendCacheURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Standard" : "Ready"
     }
 
     private var appVersion: String {
@@ -1331,29 +1311,6 @@ private struct CardButtonStyle: ButtonStyle {
     }
 }
 
-private struct DataWarningBanner: View {
-    let message: String
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundStyle(StatusTint.caution.color)
-            Text(message)
-                .font(.footnote.weight(.semibold))
-                .foregroundStyle(.white)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(StatusTint.caution.color.opacity(0.12), in: RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: Theme.Radius.md, style: .continuous)
-                .strokeBorder(StatusTint.caution.color.opacity(0.3), lineWidth: 1)
-        }
-        .accessibilityElement(children: .combine)
-    }
-}
-
 private struct InlineNotice: View {
     let message: String
 
@@ -1370,15 +1327,11 @@ private struct InlineNotice: View {
 
 private struct LastUpdatedFooter: View {
     let date: Date?
-    let source: String
-    let usesUTC: Bool
 
     var body: some View {
         HStack(spacing: 6) {
             Image(systemName: "arrow.triangle.2.circlepath")
             Text(updatedText)
-            Text("·")
-            Text(source)
         }
         .font(.caption2.weight(.medium))
         .foregroundStyle(.secondary)
@@ -1410,15 +1363,18 @@ private extension View {
 }
 
 private struct EmptyFlightView: View {
+    let repository: FlightRepository
+
     var body: some View {
         VStack(spacing: 12) {
             Image(systemName: "antenna.radiowaves.left.and.right.slash")
                 .font(.largeTitle)
-            Text("No Starship flight data")
+            Text("No data")
                 .font(.title3.bold())
-            Text("Refresh again when the launch provider is reachable.")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
+            Button("Retry") {
+                Task { await repository.refresh(minInterval: 0) }
+            }
+            .disabled(repository.isLoading)
         }
         .frame(maxWidth: .infinity)
         .padding(24)

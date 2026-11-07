@@ -14,16 +14,11 @@ struct Provider: AppIntentTimelineProvider {
     func timeline(for configuration: ConfigurationAppIntent, in context: Context) async -> Timeline<StarshipWidgetEntry> {
         // The app keeps the shared cache fresh (and reloads widgets when it does), so the widget
         // only hits the network itself before the app has ever loaded data.
-        let flight: WidgetFlight
-        if let cachedFlight = WidgetSharedCache().nextFlight() {
-            flight = cachedFlight
-        } else if let launchLibraryFlight = await WidgetLaunchClient().nextStarshipFlight() {
-            flight = launchLibraryFlight
-        } else if let fallbackFlight = await WidgetSpaceXClient().nextStarshipFlight() {
-            flight = fallbackFlight
-        } else {
-            flight = .unavailable
+        var next = FlightCache.load()?.flights.nextFlight
+        if next == nil {
+            next = (try? await LaunchLibraryClient().fetchStarshipFlights(includePrevious: false))?.nextFlight
         }
+        let flight = next.map(WidgetFlight.init) ?? .unavailable
 
         let now = Date()
         let reloadDate = now.addingTimeInterval(60 * 60)
@@ -285,7 +280,7 @@ private func countdownText(for targetDate: Date?, now: Date) -> Text {
     return Text(String(format: "T-%dD %02dH", remaining / 86400, remaining / 3600 % 24))
 }
 
-struct WidgetFlight: Decodable, Hashable {
+struct WidgetFlight: Hashable {
     let name: String
     let status: String
     let launchDate: Date?
@@ -296,154 +291,10 @@ struct WidgetFlight: Decodable, Hashable {
     static let unavailable = WidgetFlight(name: "Starship", status: "TBD", launchDate: nil, pad: "Starbase")
 }
 
-private struct WidgetLaunchClient {
-    func nextStarshipFlight() async -> WidgetFlight? {
-        var components = URLComponents(string: "https://ll.thespacedevs.com/2.0.0/launch/upcoming/")
-        components?.queryItems = [
-            URLQueryItem(name: "search", value: "Starship"),
-            URLQueryItem(name: "limit", value: "5"),
-            URLQueryItem(name: "ordering", value: "net")
-        ]
-        guard let url = components?.url else { return nil }
-
-        do {
-            let (data, response) = try await URLSession.shared.data(from: url)
-            guard let http = response as? HTTPURLResponse, 200..<300 ~= http.statusCode else { return nil }
-            let decoder = JSONDecoder()
-            decoder.dateDecodingStrategy = .custom { decoder in
-                let container = try decoder.singleValueContainer()
-                let value = try container.decode(String.self)
-                if let date = ISO8601DateFormatter.withFractional.date(from: value) ?? ISO8601DateFormatter.plain.date(from: value) {
-                    return date
-                }
-                throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid date")
-            }
-            let decoded = try decoder.decode(WidgetLaunchResponse.self, from: data)
-            return decoded.results.first.map { launch in
-                WidgetFlight(name: launch.name, status: launch.status.name, launchDate: launch.net, pad: launch.pad?.location.name ?? "Starbase")
-            }
-        } catch {
-            return nil
-        }
+extension WidgetFlight {
+    init(_ flight: StarshipFlight) {
+        self.init(name: flight.name, status: flight.status.name, launchDate: flight.launchDate, pad: flight.launchSite)
     }
-}
-
-private struct WidgetSharedCache {
-    /// Must match the app's `JSONEncoder.starship` (ISO8601 dates).
-    private static let decoder: JSONDecoder = {
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        return decoder
-    }()
-
-    func nextFlight() -> WidgetFlight? {
-        guard let containerURL = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.com.morgandaly.Starship-Watcher") else {
-            return nil
-        }
-        let cacheURL = containerURL.appending(path: "starship-flights-cache.json")
-        guard let data = try? Data(contentsOf: cacheURL),
-              let cached = try? Self.decoder.decode(WidgetCachedFlights.self, from: data) else {
-            return nil
-        }
-        return cached.flights
-            .filter { ($0.launchDate ?? .distantFuture) >= .now.addingTimeInterval(-6 * 60 * 60) }
-            .sorted { ($0.launchDate ?? .distantFuture) < ($1.launchDate ?? .distantFuture) }
-            .first
-            .map { WidgetFlight(name: $0.name, status: $0.status.name, launchDate: $0.launchDate, pad: $0.launchSite) }
-    }
-}
-
-private struct WidgetCachedFlights: Decodable {
-    let flights: [WidgetCachedFlight]
-}
-
-private struct WidgetCachedFlight: Decodable {
-    let name: String
-    let status: WidgetCachedStatus
-    let launchDate: Date?
-    let launchSite: String
-}
-
-private struct WidgetCachedStatus: Decodable {
-    let name: String
-}
-
-private struct WidgetSpaceXClient {
-    func nextStarshipFlight() async -> WidgetFlight? {
-        guard let url = URL(string: "https://api.spacexdata.com/v5/launches/upcoming") else { return nil }
-
-        do {
-            let (data, response) = try await URLSession.shared.data(from: url)
-            guard let http = response as? HTTPURLResponse, 200..<300 ~= http.statusCode else { return nil }
-            let decoder = JSONDecoder()
-            decoder.dateDecodingStrategy = .custom { decoder in
-                let container = try decoder.singleValueContainer()
-                let value = try container.decode(String.self)
-                if let date = ISO8601DateFormatter.withFractional.date(from: value) ?? ISO8601DateFormatter.plain.date(from: value) {
-                    return date
-                }
-                throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid date")
-            }
-            let launches = try decoder.decode([WidgetSpaceXLaunch].self, from: data)
-            return launches.first { launch in
-                let searchable = "\(launch.name) \(launch.details ?? "")".lowercased()
-                return searchable.contains("starship") || searchable.contains("flight test")
-            }.map { launch in
-                WidgetFlight(name: launch.name, status: "Backup source", launchDate: launch.dateUTC, pad: "SpaceX")
-            }
-        } catch {
-            return nil
-        }
-    }
-}
-
-private struct WidgetSpaceXLaunch: Decodable {
-    let name: String
-    let details: String?
-    let dateUTC: Date?
-
-    enum CodingKeys: String, CodingKey {
-        case name
-        case details
-        case dateUTC = "date_utc"
-    }
-}
-
-private struct WidgetLaunchResponse: Decodable {
-    let results: [WidgetLaunch]
-}
-
-private struct WidgetLaunch: Decodable {
-    let name: String
-    let status: WidgetLaunchStatus
-    let net: Date?
-    let pad: WidgetLaunchPad?
-}
-
-private struct WidgetLaunchStatus: Decodable {
-    let name: String
-}
-
-private struct WidgetLaunchPad: Decodable {
-    let location: WidgetLaunchLocation
-}
-
-private struct WidgetLaunchLocation: Decodable {
-    let name: String
-}
-
-private extension ISO8601DateFormatter {
-    static let plain: ISO8601DateFormatter = {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime]
-        return formatter
-    }()
-
-    static let withFractional: ISO8601DateFormatter = {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter
-    }()
 }
 
 extension ConfigurationAppIntent {
