@@ -4,32 +4,33 @@ import SwiftUI
 
 struct Provider: AppIntentTimelineProvider {
     func placeholder(in context: Context) -> StarshipWidgetEntry {
-        StarshipWidgetEntry(date: .now, configuration: ConfigurationAppIntent(), flight: .placeholder)
+        StarshipWidgetEntry(date: .now, configuration: ConfigurationAppIntent(), flight: .preview)
     }
 
     func snapshot(for configuration: ConfigurationAppIntent, in context: Context) async -> StarshipWidgetEntry {
-        StarshipWidgetEntry(date: .now, configuration: configuration, flight: .placeholder)
+        StarshipWidgetEntry(date: .now, configuration: configuration, flight: FlightCache.load()?.flights.nextFlight ?? .preview)
     }
 
     func timeline(for configuration: ConfigurationAppIntent, in context: Context) async -> Timeline<StarshipWidgetEntry> {
         // The app keeps the shared cache fresh (and reloads widgets when it does), so the widget
         // only hits the network itself before the app has ever loaded data.
-        var next = FlightCache.load()?.flights.nextFlight
-        if next == nil {
-            next = (try? await LaunchLibraryClient().fetchStarshipFlights(includePrevious: false))?.nextFlight
+        var flight = FlightCache.load()?.flights.nextFlight
+        if flight == nil {
+            flight = (try? await LaunchLibraryClient().fetchStarshipFlights(includePrevious: false))?.nextFlight
         }
-        let flight = next.map(WidgetFlight.init) ?? .unavailable
 
         let now = Date()
         let reloadDate = now.addingTimeInterval(60 * 60)
-        // Countdown text only changes format at T-24h (days -> ticking timer) and T-0 (T+),
-        // and "T-1D 12H" needs a fresh entry each hour. The timer text ticks on its own.
+        // "T-1D 12H" needs a fresh entry each hour, and the timer text ticks on its own.
+        // The large widget's stage changes at each event, and the pin button appears at T-8h.
         var dates = stride(from: 0, to: 60, by: 15).map { now.addingTimeInterval(TimeInterval($0 * 60)) }
-        if let launchDate = flight.launchDate {
-            dates += [launchDate.addingTimeInterval(-24 * 60 * 60), launchDate, launchDate.addingTimeInterval(-8 * 60 * 60)]
-                .filter { $0 > now && $0 < reloadDate }
+        if let flight, flight.hasFirmDate, let launchDate = flight.launchDate {
+            dates += flight.timeline.compactMap(\.targetDate) + [launchDate.addingTimeInterval(-8 * 60 * 60)]
         }
-        let entries = dates.sorted().map { StarshipWidgetEntry(date: $0, configuration: configuration, flight: flight) }
+        let entries = dates
+            .filter { $0 >= now && $0 < reloadDate }
+            .sorted()
+            .map { StarshipWidgetEntry(date: $0, configuration: configuration, flight: flight) }
         return Timeline(entries: entries, policy: .after(reloadDate))
     }
 }
@@ -37,7 +38,8 @@ struct Provider: AppIntentTimelineProvider {
 struct StarshipWidgetEntry: TimelineEntry {
     let date: Date
     let configuration: ConfigurationAppIntent
-    let flight: WidgetFlight
+    /// Nil only when nothing is cached and the network failed.
+    let flight: StarshipFlight?
 }
 
 struct WidgetExtensionEntryView: View {
@@ -45,188 +47,196 @@ struct WidgetExtensionEntryView: View {
     let entry: StarshipWidgetEntry
 
     var body: some View {
-        ZStack {
-            WidgetBackdrop()
-
-            switch family {
-            case .systemSmall:
-                SmallStarshipWidget(entry: entry)
-            case .systemLarge:
-                LargeStarshipWidget(entry: entry)
-            case .accessoryInline:
-                Text("Starship \(countdownText(for: entry.flight.launchDate, now: entry.date))")
-            case .accessoryRectangular:
-                AccessoryStarshipWidget(entry: entry)
-            default:
-                MediumStarshipWidget(entry: entry)
+        Group {
+            if let flight = entry.flight {
+                switch family {
+                case .systemSmall:
+                    SmallStarshipWidget(flight: flight, now: entry.date)
+                case .systemLarge:
+                    LargeStarshipWidget(flight: flight, now: entry.date)
+                case .accessoryInline:
+                    Text("\(flight.shortName) \(clockText(for: flight, now: entry.date))")
+                case .accessoryRectangular:
+                    AccessoryStarshipWidget(flight: flight, now: entry.date)
+                default:
+                    MediumStarshipWidget(flight: flight, now: entry.date)
+                }
+            } else {
+                Text("No data").caps(.caption, color: Theme.secondary)
             }
         }
         .containerBackground(.black, for: .widget)
     }
 }
 
-private struct SmallStarshipWidget: View {
-    let entry: StarshipWidgetEntry
+struct SmallStarshipWidget: View {
+    let flight: StarshipFlight
+    let now: Date
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            WidgetHeader(flight: entry.flight, compact: true)
+        VStack(alignment: .leading, spacing: 8) {
+            FlightNameText(flight: flight)
             Spacer(minLength: 0)
-            WidgetCountdown(targetDate: entry.flight.launchDate, now: entry.date, size: 26)
-            WidgetStatusSiteRow(flight: entry.flight, compact: true)
-        }
-        .padding(14)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-    }
-}
-
-private struct MediumStarshipWidget: View {
-    let entry: StarshipWidgetEntry
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            WidgetHeader(flight: entry.flight, compact: false)
-            WidgetCountdown(targetDate: entry.flight.launchDate, now: entry.date, size: 30)
-            Spacer(minLength: 0)
-            HStack {
-                WidgetStatusSiteRow(flight: entry.flight, compact: false)
-                StartCountdownButton(entry: entry)
-            }
+            WidgetClock(flight: flight, now: now, font: .title2)
+            Text(flight.status.shortName)
+                .caps(.caption2, color: flight.status.color, tracking: 1.5)
         }
         .padding(16)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
     }
 }
 
-private struct LargeStarshipWidget: View {
-    let entry: StarshipWidgetEntry
+struct MediumStarshipWidget: View {
+    let flight: StarshipFlight
+    let now: Date
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            WidgetHeader(flight: entry.flight, compact: false)
-            WidgetCountdown(targetDate: entry.flight.launchDate, now: entry.date, size: 40)
-            HStack {
-                WidgetStatusSiteRow(flight: entry.flight, compact: false)
-                StartCountdownButton(entry: entry)
-            }
-            Divider().overlay(.white.opacity(0.16))
-            VStack(alignment: .leading, spacing: 6) {
-                Text("NEXT EVENT")
-                    .font(.caption2.weight(.black))
-                    .foregroundStyle(.white.opacity(0.58))
-                Text("Launch data refreshes automatically and falls back to saved flight data when offline.")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.white.opacity(0.72))
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+        VStack(alignment: .leading, spacing: 8) {
+            FlightNameText(flight: flight)
             Spacer(minLength: 0)
+            WidgetClock(flight: flight, now: now, font: .largeTitle)
+            Spacer(minLength: 0)
+            HStack(alignment: .lastTextBaseline, spacing: 12) {
+                StatusPlaceText(flight: flight)
+                Spacer(minLength: 0)
+                StartCountdownButton(flight: flight, now: now)
+            }
         }
-        .padding(22)
+        .padding(18)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
     }
 }
 
-private struct AccessoryStarshipWidget: View {
-    let entry: StarshipWidgetEntry
+struct LargeStarshipWidget: View {
+    let flight: StarshipFlight
+    let now: Date
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(entry.flight.name)
-                .font(.caption.weight(.bold))
-                .lineLimit(1)
-            countdownText(for: entry.flight.launchDate, now: entry.date)
-                .font(.caption2.weight(.black).monospacedDigit())
-        }
-    }
-}
+        VStack(alignment: .leading, spacing: 14) {
+            FlightNameText(flight: flight)
+            WidgetClock(flight: flight, now: now, font: .largeTitle)
+            HStack(alignment: .lastTextBaseline, spacing: 12) {
+                StatusPlaceText(flight: flight)
+                Spacer(minLength: 0)
+                StartCountdownButton(flight: flight, now: now)
+            }
 
-private struct WidgetHeader: View {
-    let flight: WidgetFlight
-    let compact: Bool
+            Rectangle().fill(Theme.hairline).frame(height: 1)
 
-    var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("STARSHIP")
-                    .font(.caption2.weight(.black))
-                    .foregroundStyle(.white.opacity(0.58))
-                Text(flight.name)
-                    .font(.system(compact ? .headline : .title3, design: .default).weight(.black))
-                    .lineLimit(compact ? 2 : 1)
-                    .minimumScaleFactor(0.68)
+            if flight.isInActiveWindow(now: now) {
+                WidgetStage(flight: flight, now: now)
+            } else {
+                Text(flight.summary)
+                    .font(.footnote.weight(.light))
+                    .foregroundStyle(Theme.secondary)
             }
             Spacer(minLength: 0)
-            Image(systemName: "paperplane.fill")
-                .font(.system(size: compact ? 16 : 18, weight: .bold))
-                .foregroundStyle(.white.opacity(0.78))
-                .rotationEffect(.degrees(-28))
+        }
+        .padding(20)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+    }
+}
+
+/// Launch hour on the large widget. System-drawn timers aside, a snapshot, so no live remaining time.
+private struct WidgetStage: View {
+    let flight: StarshipFlight
+    let now: Date
+
+    var body: some View {
+        let progress = flight.progress(now: now)
+        VStack(alignment: .leading, spacing: 10) {
+            Text(progress.title)
+                .caps(.footnote, color: progress.isAlert ? Theme.alert : .white)
+            ForEach(progress.upcoming) { event in
+                HStack(spacing: 12) {
+                    Text(event.offsetText)
+                        .font(.caption.weight(.light).monospacedDigit())
+                    Text(event.title)
+                        .font(.caption.weight(.light))
+                }
+                .foregroundStyle(Theme.secondary)
+            }
         }
     }
 }
 
-private struct WidgetCountdown: View {
-    let targetDate: Date?
+struct AccessoryStarshipWidget: View {
+    let flight: StarshipFlight
     let now: Date
-    let size: CGFloat
 
     var body: some View {
-        countdownText(for: targetDate, now: now)
-            .font(.system(size: size, weight: .bold))
-            .monospacedDigit()
+        VStack(alignment: .leading, spacing: 2) {
+            Text(flight.shortName)
+                .font(.caption.weight(.light))
+                .textCase(.uppercase)
+                .tracking(1.5)
+                .lineLimit(1)
+            clockText(for: flight, now: now)
+                .font(.headline.weight(.light).monospacedDigit())
+                .textCase(.uppercase)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+        }
+    }
+}
+
+private struct FlightNameText: View {
+    let flight: StarshipFlight
+
+    var body: some View {
+        Text(flight.shortName)
+            .caps(.caption, color: Theme.secondary)
             .lineLimit(1)
-            .minimumScaleFactor(0.48)
+    }
+}
+
+private struct StatusPlaceText: View {
+    let flight: StarshipFlight
+
+    var body: some View {
+        (Text(flight.status.shortName).foregroundStyle(flight.status.color)
+            + Text(" · \(flight.placeText)").foregroundStyle(Theme.secondary))
+            .font(.caption2)
+            .textCase(.uppercase)
+            .tracking(1.5)
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+    }
+}
+
+private struct WidgetClock: View {
+    let flight: StarshipFlight
+    let now: Date
+    let font: Font
+
+    var body: some View {
+        clockText(for: flight, now: now)
+            .font(font.weight(.light).monospacedDigit())
+            .textCase(.uppercase)
+            .foregroundStyle(.white)
+            .lineLimit(1)
+            .minimumScaleFactor(0.5)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .background(.white.opacity(0.09), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(.white.opacity(0.16), lineWidth: 1)
-            }
     }
 }
 
 /// Starts the Live Activity in place. Only shown inside the 8 hour Live Activity limit.
 private struct StartCountdownButton: View {
-    let entry: StarshipWidgetEntry
+    let flight: StarshipFlight
+    let now: Date
 
     var body: some View {
-        if let launchDate = entry.flight.launchDate,
-           launchDate > entry.date,
-           launchDate.timeIntervalSince(entry.date) <= 8 * 60 * 60 {
+        if flight.hasFirmDate, let launchDate = flight.launchDate,
+           launchDate > now, launchDate.timeIntervalSince(now) <= 8 * 60 * 60 {
             Button(intent: StartLaunchCountdownIntent()) {
-                Label("Pin", systemImage: "pin.fill")
-                    .font(.caption.weight(.black))
+                Text("Pin")
+                    .caps(.caption2, tracking: 2)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .overlay { Rectangle().strokeBorder(.white, lineWidth: 1) }
             }
-            .buttonStyle(.bordered)
-            .tint(.white)
+            .buttonStyle(.plain)
         }
-    }
-}
-
-private struct WidgetStatusSiteRow: View {
-    let flight: WidgetFlight
-    let compact: Bool
-
-    var body: some View {
-        let (label, tint) = launchStatusBadge(flight.status)
-        HStack(spacing: compact ? 6 : 8) {
-            Text(label)
-                .font(.caption.weight(.black))
-                .foregroundStyle(tint)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-                .padding(.horizontal, compact ? 8 : 10)
-                .padding(.vertical, compact ? 4 : 5)
-                .background(tint.opacity(0.18), in: Capsule())
-
-            Label(flight.pad, systemImage: "mappin.and.ellipse")
-                .font(.caption.weight(.bold))
-                .lineLimit(1)
-                .minimumScaleFactor(0.64)
-                .foregroundStyle(.white.opacity(0.76))
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -244,61 +254,38 @@ struct WidgetExtension: Widget {
     }
 }
 
-private struct WidgetBackdrop: View {
-    var body: some View {
-        LinearGradient(
-            colors: [.black, Color(red: 0.08, green: 0.08, blue: 0.09), .black],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
-        .overlay(alignment: .topTrailing) {
-            Circle()
-                .stroke(.white.opacity(0.08), lineWidth: 34)
-                .frame(width: 150, height: 150)
-                .offset(x: 56, y: -70)
-        }
-        .overlay(alignment: .bottomLeading) {
-            Rectangle()
-                .fill(.white.opacity(0.08))
-                .frame(height: 1)
-        }
-    }
-}
-
 /// Widgets are snapshots: under a day out, use system timer text so it ticks every second.
 /// Further out, whole days/hours are fine since the timeline has an entry every 15 minutes.
-private func countdownText(for targetDate: Date?, now: Date) -> Text {
-    guard let targetDate else { return Text("TBD") }
-    let interval = targetDate.timeIntervalSince(now)
-    if interval <= 0 {
-        return Text("T+\(Text(targetDate, style: .timer))")
+func clockText(for flight: StarshipFlight, now: Date) -> Text {
+    switch flight.clock(now: now) {
+    case .net(let text):
+        return Text(text)
+    case .awaitingLiftoff:
+        return Text("Awaiting liftoff")
+    case .elapsed(let date):
+        return Text("T+\(Text(date, style: .timer))")
+    case .countdown(let date):
+        let remaining = Int(date.timeIntervalSince(now))
+        if remaining < 86_400 {
+            return Text("T-\(Text(timerInterval: now...date, countsDown: true))")
+        }
+        return Text(String(format: "T-%dD %02dH", remaining / 86_400, remaining / 3_600 % 24))
     }
-    if interval < 86400 {
-        return Text("T-\(Text(timerInterval: now...targetDate, countsDown: true))")
-    }
-    let remaining = Int(interval)
-    return Text(String(format: "T-%dD %02dH", remaining / 86400, remaining / 3600 % 24))
 }
 
-struct WidgetFlight: Hashable {
-    let name: String
-    let status: String
-    let launchDate: Date?
-    let pad: String
-
-    static let placeholder = WidgetFlight(name: "Flight Test", status: "TBD", launchDate: Calendar.current.date(byAdding: .day, value: 1, to: .now), pad: "Starbase")
-    /// No data at all: show TBD rather than a fake countdown.
-    static let unavailable = WidgetFlight(name: "Starship", status: "TBD", launchDate: nil, pad: "Starbase")
-}
-
-extension WidgetFlight {
-    init(_ flight: StarshipFlight) {
-        self.init(name: flight.name, status: flight.status.name, launchDate: flight.launchDate, pad: flight.launchSite)
-    }
+extension StarshipFlight {
+    /// Sample for the widget gallery.
+    static let preview = StarshipFlight(
+        id: "preview", name: "Starship | Flight 15", missionName: "Flight 15",
+        summary: "Next Starship flight test from Starbase.", vehicle: "Starship",
+        status: LaunchStatus(name: "Go for Launch"), launchDate: .now.addingTimeInterval(26 * 60 * 60),
+        windowStart: nil, windowEnd: nil, launchSite: "Starbase", padName: "Pad 2", probability: nil,
+        imageURL: nil, webcastLive: false, sourceURL: nil
+    )
 }
 
 extension ConfigurationAppIntent {
-    fileprivate static var preview: ConfigurationAppIntent {
+    fileprivate static var previewIntent: ConfigurationAppIntent {
         ConfigurationAppIntent()
     }
 }
@@ -306,5 +293,5 @@ extension ConfigurationAppIntent {
 #Preview(as: .systemLarge) {
     WidgetExtension()
 } timeline: {
-    StarshipWidgetEntry(date: .now, configuration: .preview, flight: .placeholder)
+    StarshipWidgetEntry(date: .now, configuration: .previewIntent, flight: .preview)
 }

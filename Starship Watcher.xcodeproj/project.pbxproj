@@ -54,9 +54,12 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				FlightCache.swift,
+				FlightDisplay.swift,
 				FlightModels.swift,
 				LaunchLibraryClient.swift,
+				MissionProgress.swift,
 				SharedAppGroup.swift,
+				Theme.swift,
 			);
 			target = ECFE078E3010C372002BFC39 /* WidgetExtensionExtension */;
 		};

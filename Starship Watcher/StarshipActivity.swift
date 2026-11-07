@@ -78,7 +78,8 @@ struct StarshipActivityController {
         }
 
         await endAll()
-        guard canStart, Self.isEnabled, let launchDate = flight.launchDate, Date.now >= Self.windowStart(for: launchDate) else { return }
+        guard canStart, Self.isEnabled, flight.hasFirmDate, let launchDate = flight.launchDate,
+              Date.now >= Self.windowStart(for: launchDate) else { return }
         try? request(for: flight)
     }
 
@@ -89,7 +90,7 @@ struct StarshipActivityController {
             return
         }
         guard ActivityAuthorizationInfo().areActivitiesEnabled else { throw CountdownStartError.activitiesDisabled }
-        guard let launchDate = flight.launchDate else { throw CountdownStartError.launchTBD }
+        guard flight.hasFirmDate, let launchDate = flight.launchDate else { throw CountdownStartError.launchTBD }
         guard launchDate.timeIntervalSinceNow <= Self.maxLead else { throw CountdownStartError.tooEarly }
 
         await endAll()
@@ -175,9 +176,10 @@ struct StarshipActivityController {
         return StarshipFlightAttributes.ContentState(
             phase: event?.phase.rawValue ?? "Countdown",
             status: flight.status.name,
-            targetDate: flight.launchDate,
+            // A running activity whose date goes soft shows TBD, never a countdown to a placeholder.
+            targetDate: flight.hasFirmDate ? flight.launchDate : nil,
             detail: flight.padName,
-            stage: event?.title
+            stage: flight.progress(now: .now).title
         )
     }
 }

@@ -38,9 +38,7 @@ struct ContentView: View {
         .task {
             await repository.refresh()
             await syncLiveActivity()
-            if notificationsEnabled, let nextFlight = repository.nextFlight {
-                await NotificationScheduler().scheduleReminders(for: nextFlight)
-            }
+            await NotificationScheduler().sync(flight: repository.nextFlight)
             await newsRepository.refresh()
         }
         .onChange(of: liveActivityEnabled) { _, enabled in
@@ -51,6 +49,9 @@ struct ContentView: View {
                 await syncLiveActivity()
             }
         }
+        .onChange(of: notificationsEnabled) { _, _ in
+            Task { await NotificationScheduler().sync(flight: repository.nextFlight) }
+        }
         .onChange(of: scenePhase) { _, phase in
             // Covers opening from the "countdown ready" reminder or a widget tap.
             guard phase == .active, !repository.isLoading else { return }
@@ -60,7 +61,10 @@ struct ContentView: View {
             }
         }
         .onChange(of: repository.nextFlight) { _, _ in
-            Task { await syncLiveActivity() }
+            Task {
+                await syncLiveActivity()
+                await NotificationScheduler().sync(flight: repository.nextFlight)
+            }
         }
         .task(id: liveActivityMonitorID) {
             await monitorLiveActivityThresholds()
@@ -79,7 +83,7 @@ struct ContentView: View {
 
     private func monitorLiveActivityThresholds() async {
         #if canImport(ActivityKit)
-        guard liveActivityEnabled, let launchDate = repository.nextFlight?.launchDate else { return }
+        guard liveActivityEnabled, let flight = repository.nextFlight, flight.hasFirmDate, let launchDate = flight.launchDate else { return }
         let start = StarshipActivityController.windowStart(for: launchDate)
         while !Task.isCancelled, start > .now {
             try? await Task.sleep(for: .seconds(min(max(start.timeIntervalSinceNow, 1), 60 * 60)))

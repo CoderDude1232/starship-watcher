@@ -33,6 +33,19 @@ extension LaunchStatus {
         }
     }
 
+    /// For tight spots: widgets and the Dynamic Island.
+    var shortName: String {
+        let value = name.lowercased()
+        if isSuccess { return "Success" }
+        if isAlert { return value.contains("scrub") ? "Scrub" : "Failure" }
+        if isHold { return "Hold" }
+        if isTBD { return "TBD" }
+        if value.contains("confirmed") || value.contains("tbc") { return "TBC" }
+        if value.contains("flight") || value.contains("progress") { return "In flight" }
+        if isGo { return "Go" }
+        return name
+    }
+
     var color: Color {
         isAlert ? Theme.alert : .white
     }
