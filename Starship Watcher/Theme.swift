@@ -1,127 +1,46 @@
 import SwiftUI
 
-/// Central design system for Starship Watcher. Keeping spacing, radii, materials,
-/// and semantic colors in one place is what lets every screen feel like one app.
+/// Design system: white text on pure black, red only for bad news and LIVE.
 enum Theme {
-    /// Consistent spacing scale used for stacks and padding across the app.
-    enum Spacing {
-        static let xs: CGFloat = 6
-        static let sm: CGFloat = 10
-        static let md: CGFloat = 14
-        static let lg: CGFloat = 18
-        static let xl: CGFloat = 22
-        static let xxl: CGFloat = 28
-    }
-
-    /// Corner-radius scale. Larger surfaces get larger radii for a hierarchy of depth.
-    enum Radius {
-        static let sm: CGFloat = 12
-        static let md: CGFloat = 16
-        static let lg: CGFloat = 22
-        static let hero: CGFloat = 28
-    }
-
-    /// Deep-space background gradient shared by every screen and the widget.
-    static let backgroundGradient = LinearGradient(
-        colors: [
-            Color(red: 0.02, green: 0.03, blue: 0.06),
-            Color(red: 0.07, green: 0.08, blue: 0.12),
-            Color(red: 0.01, green: 0.02, blue: 0.03)
-        ],
-        startPoint: .topLeading,
-        endPoint: .bottomTrailing
-    )
-
-    /// Hairline color used for rules and grid dividers — the thing that makes a layout
-    /// read as "engineered" rather than a stack of translucent cards.
-    static let hairline = Color.white.opacity(0.14)
-
-    /// Flat content surface: near-black with a cool bias, opaque enough to read over the photo.
-    static let surface = Color(red: 0.04, green: 0.045, blue: 0.06).opacity(0.82)
-
-    /// Opaque fill for telemetry cells. The grid's hairline background shows through any
-    /// translucent fill, which read as a white glass panel over the photo.
-    static let cell = Color(red: 0.06, green: 0.065, blue: 0.08)
-
-    /// The app's single accent, used sparingly for the active/live state.
-    static let accent = Color(red: 0.42, green: 0.68, blue: 1.0)
+    static let gutter: CGFloat = 20
+    static let hairline = Color.white.opacity(0.16)
+    /// Labels and future events.
+    static let secondary = Color.white.opacity(0.6)
+    /// Past events and footnotes.
+    static let tertiary = Color.white.opacity(0.36)
+    /// Scrub, failure and LIVE. Nothing else gets colour.
+    static let alert = Color(red: 1.0, green: 0.27, blue: 0.23)
 }
 
 extension View {
-    /// Small uppercase label used above titles and as field labels. Expanded width and
-    /// tracking give it the instrument-panel voice; values below it stay in standard SF.
-    func eyebrowStyle(color: Color = .secondary) -> some View {
+    /// The app's voice: uppercase, widely tracked, never bold.
+    func caps(_ font: Font = .footnote, color: Color = .white, tracking: CGFloat = 2) -> some View {
         self
-            .font(.eyebrow)
+            .font(font)
             .textCase(.uppercase)
-            .tracking(0.8)
+            .tracking(tracking)
             .foregroundStyle(color)
-    }
-}
-
-// MARK: - Type
-
-extension Font {
-    /// Display face: SF Pro Expanded. Reserved for flight names and screen-level titles.
-    static let missionTitle = Font.title.weight(.black).width(.expanded)
-    /// Secondary display size for card and row titles.
-    static let missionHeadline = Font.title3.weight(.heavy).width(.expanded)
-    /// Section rule titles.
-    static let sectionTitle = Font.footnote.weight(.bold).width(.expanded)
-    static let eyebrow = Font.caption2.weight(.semibold).width(.expanded)
-    /// Hero countdown. Monospaced so the clock never shifts as digits tick.
-    static let countdown = Font.system(size: 44, weight: .medium, design: .monospaced)
-    /// Telemetry readout values.
-    static let telemetry = Font.subheadline.weight(.semibold).monospacedDigit()
-}
-
-/// Semantic launch-status colors. Previously every status rendered white, which made
-/// the whole app read as flat; mapping to intent gives instant visual meaning.
-enum StatusTint {
-    case go
-    case caution
-    case inFlight
-    case success
-    case failure
-    case neutral
-
-    init(statusName: String) {
-        let value = statusName.lowercased()
-        switch true {
-        case value.contains("go") || value.contains("confirm"):
-            self = .go
-        case value.contains("success") || value.contains("complete"):
-            self = .success
-        case value.contains("fail") || value.contains("scrub") || value.contains("abort"):
-            self = .failure
-        case value.contains("flight") || value.contains("progress") || value.contains("live"):
-            self = .inFlight
-        case value.contains("hold") || value.contains("tbd") || value.contains("tbc") || value.contains("upcoming"):
-            self = .caution
-        default:
-            self = .neutral
-        }
-    }
-
-    var color: Color {
-        switch self {
-        case .go: Color(red: 0.36, green: 0.86, blue: 0.52)
-        case .caution: Color(red: 0.98, green: 0.76, blue: 0.30)
-        case .inFlight: Color(red: 0.42, green: 0.68, blue: 1.0)
-        case .success: Color(red: 0.30, green: 0.82, blue: 0.78)
-        case .failure: Color(red: 0.98, green: 0.45, blue: 0.42)
-        case .neutral: Color.white.opacity(0.88)
-        }
     }
 }
 
 extension LaunchStatus {
     var displayName: String {
-        name.lowercased() == "go" ? "Go for launch" : name
+        switch name.lowercased() {
+        case "go": "Go for launch"
+        case "tbd": "To be determined"
+        case "tbc": "To be confirmed"
+        default: name
+        }
     }
 
-    var tint: Color {
-        StatusTint(statusName: name).color
+    /// Any scrub or failure. Holds stay white.
+    var isAlert: Bool {
+        let value = name.lowercased()
+        return value.contains("fail") || value.contains("scrub") || value.contains("abort")
+    }
+
+    var color: Color {
+        isAlert ? Theme.alert : .white
     }
 }
 
@@ -146,33 +65,5 @@ enum Countdown {
                 : String(format: "%@%d:%02d:%02d:%02d", sign, days, hours, minutes, seconds)
         }
         return String(format: "%@%02d:%02d:%02d", sign, hours, minutes, seconds)
-    }
-
-    /// "in 70d 13h" for events other than liftoff, which keeps T± to itself.
-    static func relative(to target: Date, now: Date) -> String {
-        let remaining = max(Int(target.timeIntervalSince(now)), 0)
-        let days = remaining / 86_400
-        let hours = remaining / 3_600 % 24
-        let minutes = remaining / 60 % 60
-        let seconds = remaining % 60
-
-        if days > 0 { return "in \(days)d \(hours)h" }
-        if hours > 0 { return "in \(hours)h \(minutes)m" }
-        return "in \(minutes)m \(seconds)s"
-    }
-}
-
-// MARK: - Content surface
-
-extension View {
-    /// Flat card surface for content. Liquid Glass is reserved for the navigation and
-    /// controls layer (tab bar, toolbars, buttons); glass on content fights it.
-    func starshipSurface(cornerRadius: CGFloat) -> some View {
-        self
-            .background(Theme.surface, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-            .overlay {
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .strokeBorder(Theme.hairline, lineWidth: 1)
-            }
     }
 }

@@ -50,11 +50,8 @@ struct StarshipActivityController {
         UserDefaults.standard.object(forKey: "liveActivityEnabled") as? Bool ?? true
     }
 
-    /// Selected lead time, capped at the 8 hour limit.
-    static var lead: TimeInterval {
-        let hours = UserDefaults.standard.object(forKey: "activityLeadHours") as? Int ?? 6
-        return min(TimeInterval(hours * 60 * 60), maxLead)
-    }
+    /// How long before liftoff the activity starts.
+    static let lead: TimeInterval = 6 * 60 * 60
 
     static func windowStart(for launchDate: Date) -> Date {
         launchDate.addingTimeInterval(-lead)
@@ -171,7 +168,7 @@ struct StarshipActivityController {
         return AlertConfiguration(title: "\(flightName) update", body: "\(body)", sound: .default)
     }
 
-    /// The stage only moves at sync points (foreground, Mission tab poll, BG refresh); without
+    /// The stage only moves at sync points (foreground, Launch tab poll, BG refresh); without
     /// ActivityKit push it can lag the real flight between them. Stage changes alone never alert.
     private func contentState(for flight: StarshipFlight) -> StarshipFlightAttributes.ContentState {
         let event = flight.currentEvent(now: .now)
