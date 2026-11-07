@@ -24,10 +24,7 @@ enum BackgroundRefresh {
         await StarshipActivityController().sync(flight: repository.nextFlight, canStart: false)
         #endif
 
-        let notificationsEnabled = UserDefaults.standard.object(forKey: "notificationsEnabled") as? Bool ?? true
-        if notificationsEnabled, let nextFlight = repository.nextFlight {
-            await NotificationScheduler().scheduleReminders(for: nextFlight)
-        }
+        await NotificationScheduler().sync(flight: repository.nextFlight)
 
         schedule()
     }
