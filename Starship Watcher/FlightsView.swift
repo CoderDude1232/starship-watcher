@@ -69,19 +69,17 @@ private struct FlightRow: View {
     let showsYear: Bool
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 16) {
+        AdaptiveRow {
             VStack(alignment: .leading, spacing: 5) {
                 Text(flight.shortName)
                     .caps(.subheadline.weight(.light), tracking: 1.5)
                     .multilineTextAlignment(.leading)
-                    .lineLimit(2)
                 Text(flight.dateText(usesUTC: usesUTC, year: showsYear))
                     .caps(.caption2, color: Theme.secondary, tracking: 1)
             }
             Spacer(minLength: 0)
             Text(flight.status.name)
                 .caps(.caption2, color: flight.status.isAlert ? Theme.alert : Theme.secondary, tracking: 1)
-                .lineLimit(1)
         }
         .padding(.vertical, 14)
         .overlay(alignment: .bottom) {

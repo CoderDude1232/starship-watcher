@@ -12,8 +12,8 @@ struct Starship_WatcherApp: App {
     @Environment(\.scenePhase) private var scenePhase
 
     init() {
-        let largeTitle = UIFont.systemFont(ofSize: 28, weight: .light)
-        let inlineTitle = UIFont.systemFont(ofSize: 15, weight: .regular)
+        let largeTitle = UIFontMetrics(forTextStyle: .largeTitle).scaledFont(for: .systemFont(ofSize: 28, weight: .light))
+        let inlineTitle = UIFontMetrics(forTextStyle: .headline).scaledFont(for: .systemFont(ofSize: 15, weight: .regular))
         UINavigationBar.appearance().largeTitleTextAttributes = [.font: largeTitle, .kern: 4]
         UINavigationBar.appearance().titleTextAttributes = [.font: inlineTitle, .kern: 2]
     }

@@ -5,9 +5,9 @@ enum Theme {
     static let gutter: CGFloat = 20
     static let hairline = Color.white.opacity(0.16)
     /// Labels and future events.
-    static let secondary = Color.white.opacity(0.6)
-    /// Past events and footnotes.
-    static let tertiary = Color.white.opacity(0.36)
+    static let secondary = Color.white.opacity(0.68)
+    /// Past events and footnotes. The dimmest grey that still reaches 4.5:1 on black.
+    static let tertiary = Color.white.opacity(0.46)
     /// Scrub, failure and LIVE. Nothing else gets colour.
     static let alert = Color(red: 1.0, green: 0.27, blue: 0.23)
 }
@@ -31,12 +31,6 @@ extension LaunchStatus {
         case "tbc": "To be confirmed"
         default: name
         }
-    }
-
-    /// Any scrub or failure. Holds stay white.
-    var isAlert: Bool {
-        let value = name.lowercased()
-        return value.contains("fail") || value.contains("scrub") || value.contains("abort")
     }
 
     var color: Color {
@@ -65,5 +59,14 @@ enum Countdown {
                 : String(format: "%@%d:%02d:%02d:%02d", sign, days, hours, minutes, seconds)
         }
         return String(format: "%@%02d:%02d:%02d", sign, hours, minutes, seconds)
+    }
+
+    /// "04:12" or "2:04:12" under a day out. Nil once passed or further away.
+    static func remaining(to target: Date, now: Date) -> String? {
+        let total = Int(target.timeIntervalSince(now))
+        guard total >= 0, total < 86_400 else { return nil }
+        return total < 3_600
+            ? String(format: "%02d:%02d", total / 60, total % 60)
+            : String(format: "%d:%02d:%02d", total / 3_600, total / 60 % 60, total % 60)
     }
 }

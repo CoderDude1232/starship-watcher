@@ -1,6 +1,22 @@
 import Foundation
 
+/// What the main clock shows.
+enum FlightClock: Equatable {
+    /// Soft date: never ticks.
+    case net(String)
+    case countdown(Date)
+    /// Past NET unconfirmed: a hold or a late launch, not T+.
+    case awaitingLiftoff
+    case elapsed(Date)
+}
+
 extension StarshipFlight {
+    func clock(now: Date) -> FlightClock {
+        guard hasFirmDate, let launchDate else { return .net(netText) }
+        if launchDate > now { return .countdown(launchDate) }
+        return hasLiftedOff(now: now) ? .elapsed(launchDate) : .awaitingLiftoff
+    }
+
     /// "Starship | Flight 15" -> "Flight 15". The vehicle is implied everywhere in this app.
     var shortName: String {
         guard let range = name.range(of: " | ") else { return name }

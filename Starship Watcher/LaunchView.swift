@@ -44,8 +44,11 @@ struct LaunchView: View {
         } else if let flight {
             ScrollView {
                 VStack(spacing: 0) {
-                    LaunchHero(flight: flight, usesUTC: usesUTC)
-                        .containerRelativeFrame(.vertical, alignment: .bottomLeading)
+                    // At least a full screen, and taller when large text needs it.
+                    ZStack(alignment: .bottomLeading) {
+                        Color.clear.containerRelativeFrame(.vertical)
+                        LaunchHero(flight: flight, usesUTC: usesUTC)
+                    }
 
                     LaunchDetails(flight: flight, repository: repository)
                 }
@@ -89,7 +92,6 @@ private struct LaunchHero: View {
             VStack(alignment: .leading, spacing: 18) {
                 Text(flight.shortName)
                     .caps(.title3.weight(.light), tracking: 4)
-                    .lineLimit(2)
 
                 Text(clockText(now: now))
                     .font(.system(size: clockSize, weight: .light).monospacedDigit())
@@ -108,7 +110,11 @@ private struct LaunchHero: View {
                     }
                     Text(flight.hasFirmDate ? "\(flight.dateText(usesUTC: usesUTC)) · \(flight.placeText)" : flight.placeText)
                         .caps(.caption, color: Theme.secondary, tracking: 1.5)
-                        .lineLimit(2)
+                }
+
+                if flight.isInActiveWindow(now: now) {
+                    StageTracker(flight: flight, now: now)
+                        .padding(.top, 6)
                 }
 
                 if let streamURL = flight.liveStreamURL(now: now) {
@@ -124,11 +130,12 @@ private struct LaunchHero: View {
         .accessibilityElement(children: .contain)
     }
 
-    /// Soft dates never tick. Past NET without confirmed liftoff is a hold or a late launch, not T+.
     private func clockText(now: Date) -> String {
-        guard flight.hasFirmDate, let launchDate = flight.launchDate else { return flight.netText }
-        if launchDate <= now, !flight.hasLiftedOff(now: now) { return "Awaiting liftoff" }
-        return Countdown.text(to: launchDate, now: now)
+        switch flight.clock(now: now) {
+        case .net(let text): text
+        case .awaitingLiftoff: "Awaiting liftoff"
+        case .countdown(let date), .elapsed(let date): Countdown.text(to: date, now: now)
+        }
     }
 }
 
@@ -174,24 +181,31 @@ private struct LaunchDetails: View {
 }
 
 /// Template offsets from recent flights, not live data, hence "Typical timeline".
+/// The tracker sits here until launch nears, then moves up into the hero.
 private struct SequenceList: View {
     let flight: StarshipFlight
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                Text("Sequence").caps(color: Theme.secondary)
-                Spacer()
-                Text("Typical timeline").caps(.caption2, color: Theme.tertiary, tracking: 1.5)
-            }
+        TimelineView(.periodic(from: .now, by: 1)) { timeline in
+            let events = flight.timeline
+            // A placeholder date passing proves nothing, so soft dates mark no progress.
+            let current = flight.hasFirmDate ? flight.currentEventIndex(in: events, now: timeline.date) : nil
+            VStack(alignment: .leading, spacing: 36) {
+                if !flight.isInActiveWindow(now: timeline.date) {
+                    StageTracker(flight: flight, now: timeline.date)
+                }
 
-            TimelineView(.periodic(from: .now, by: 1)) { timeline in
-                let events = flight.timeline
-                // A placeholder date passing proves nothing, so soft dates mark no progress.
-                let current = flight.hasFirmDate ? flight.currentEventIndex(in: events, now: timeline.date) : nil
-                VStack(spacing: 0) {
-                    ForEach(events.indices, id: \.self) { index in
-                        SequenceRow(event: events[index], color: color(for: index, current: current))
+                VStack(alignment: .leading, spacing: 14) {
+                    HStack {
+                        Text("Sequence").caps(color: Theme.secondary)
+                        Spacer()
+                        Text("Typical timeline").caps(.caption2, color: Theme.tertiary, tracking: 1.5)
+                    }
+
+                    VStack(spacing: 0) {
+                        ForEach(events.indices, id: \.self) { index in
+                            SequenceRow(event: events[index], color: color(for: index, current: current))
+                        }
                     }
                 }
             }
@@ -209,11 +223,13 @@ private struct SequenceRow: View {
     let event: FlightEvent
     let color: Color
 
+    @ScaledMetric(relativeTo: .footnote) private var offsetWidth: CGFloat = 86
+
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 16) {
+        AdaptiveRow {
             Text(event.offsetText)
                 .font(.footnote.weight(.light).monospacedDigit())
-                .frame(minWidth: 86, alignment: .leading)
+                .frame(minWidth: offsetWidth, alignment: .leading)
             Text(event.title)
                 .font(.subheadline.weight(.light))
             Spacer(minLength: 0)

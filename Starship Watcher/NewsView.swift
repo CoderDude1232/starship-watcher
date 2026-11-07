@@ -56,30 +56,34 @@ struct NewsView: View {
 private struct NewsRow: View {
     let article: StarshipNewsArticle
 
+    @Environment(\.dynamicTypeSize) private var typeSize
+
     var body: some View {
         HStack(alignment: .top, spacing: 14) {
-            AsyncImage(url: article.imageURL) { phase in
-                if let image = phase.image {
-                    image
-                        .resizable()
-                        .scaledToFill()
-                } else {
-                    Color.white.opacity(0.06)
+            // The text needs the width at accessibility sizes.
+            if !typeSize.isAccessibilitySize {
+                AsyncImage(url: article.imageURL) { phase in
+                    if let image = phase.image {
+                        image
+                            .resizable()
+                            .scaledToFill()
+                    } else {
+                        Color.white.opacity(0.06)
+                    }
                 }
+                .frame(width: 72, height: 72)
+                .clipped()
+                .accessibilityHidden(true)
             }
-            .frame(width: 72, height: 72)
-            .clipped()
-            .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: 8) {
                 Text(article.title)
                     .font(.subheadline.weight(.light))
                     .foregroundStyle(.white)
                     .multilineTextAlignment(.leading)
-                    .lineLimit(3)
+                    .lineLimit(typeSize.isAccessibilitySize ? nil : 3)
                 Text("\(article.source) · \(article.publishedAt.formatted(.dateTime.month(.abbreviated).day()))")
                     .caps(.caption2, color: Theme.secondary, tracking: 1)
-                    .lineLimit(1)
             }
             Spacer(minLength: 0)
         }

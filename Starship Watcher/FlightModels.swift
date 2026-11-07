@@ -92,9 +92,26 @@ struct LaunchStatus: Codable, Hashable {
         return value.contains("determined") || value.contains("tbd")
     }
 
+    /// Launch Library: "On Hold".
+    var isHold: Bool {
+        name.lowercased().contains("hold")
+    }
+
     /// Launch Library: "On Hold", "To Be Determined".
     var isHoldOrTBD: Bool {
-        isTBD || name.lowercased().contains("hold")
+        isTBD || isHold
+    }
+
+    /// Launch Library: "Launch Successful". "Payload Deployed" also means it worked.
+    var isSuccess: Bool {
+        let value = name.lowercased()
+        return value.contains("success") || value.contains("deployed")
+    }
+
+    /// Any scrub or failure. Holds stay white.
+    var isAlert: Bool {
+        let value = name.lowercased()
+        return value.contains("fail") || value.contains("scrub") || value.contains("abort")
     }
 }
 
@@ -125,7 +142,7 @@ struct FlightEvent: Identifiable, Codable, Hashable {
             (-39 * 60, "Propellant load", .preflight),
             (-21 * 60 - 30, "Engine chill", .preflight),
             (-30, "Go for launch", .preflight),
-            (0, "Liftoff", .launch),
+            (0, "Liftoff", .ascent),
             (45, "Max Q", .ascent),
             (2 * 60 + 24, "Hot staging", .ascent),
             (2 * 60 + 30, "Boostback burn", .booster),
@@ -144,7 +161,6 @@ struct FlightEvent: Identifiable, Codable, Hashable {
 
 enum FlightPhase: String, Codable, CaseIterable {
     case preflight = "Preflight"
-    case launch = "Launch"
     case ascent = "Ascent"
     case booster = "Booster"
     case ship = "Ship"

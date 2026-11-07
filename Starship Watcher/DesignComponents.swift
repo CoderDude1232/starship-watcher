@@ -15,6 +15,21 @@ struct OutlineButtonStyle: ButtonStyle {
     }
 }
 
+/// Side by side, stacked at accessibility text sizes where a row no longer fits.
+struct AdaptiveRow<Content: View>: View {
+    var spacing: CGFloat = 16
+    @ViewBuilder let content: Content
+
+    @Environment(\.dynamicTypeSize) private var typeSize
+
+    var body: some View {
+        let layout = typeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4))
+            : AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: spacing))
+        layout { content }
+    }
+}
+
 /// Full-screen message with a retry, for when there is nothing to show.
 struct NoDataView: View {
     var title = "No data"
