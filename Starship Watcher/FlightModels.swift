@@ -75,23 +75,6 @@ extension Array where Element == StarshipFlight {
 struct LaunchStatus: Codable, Hashable {
     let name: String
 
-    var tintName: String {
-        switch name.lowercased() {
-        case let value where value.contains("go") || value.contains("confirm"):
-            return "green"
-        case let value where value.contains("hold") || value.contains("tbd"):
-            return "orange"
-        case let value where value.contains("flight") || value.contains("progress"):
-            return "blue"
-        case let value where value.contains("fail") || value.contains("scrub"):
-            return "red"
-        case let value where value.contains("success"):
-            return "teal"
-        default:
-            return "gray"
-        }
-    }
-
     /// Launch Library: "Launch in Flight", "Launch Successful", "Launch Failure", "Launch was a Partial Failure".
     var confirmsLiftoff: Bool {
         let value = name.lowercased()
@@ -109,66 +92,76 @@ struct LaunchStatus: Codable, Hashable {
         return value.contains("determined") || value.contains("tbd")
     }
 
+    /// Launch Library: "On Hold".
+    var isHold: Bool {
+        name.lowercased().contains("hold")
+    }
+
     /// Launch Library: "On Hold", "To Be Determined".
     var isHoldOrTBD: Bool {
-        isTBD || name.lowercased().contains("hold")
+        isTBD || isHold
+    }
+
+    /// Launch Library: "Launch Successful". "Payload Deployed" also means it worked.
+    var isSuccess: Bool {
+        let value = name.lowercased()
+        return value.contains("success") || value.contains("deployed")
+    }
+
+    /// Any scrub or failure. Holds stay white.
+    var isAlert: Bool {
+        let value = name.lowercased()
+        return value.contains("fail") || value.contains("scrub") || value.contains("abort")
     }
 }
 
 struct FlightEvent: Identifiable, Codable, Hashable {
     let id: UUID
     let title: String
-    let detail: String
     let targetDate: Date?
+    /// Seconds from liftoff. Holds even when the date slips.
+    let offset: TimeInterval
     let phase: FlightPhase
 
-    init(id: UUID = UUID(), title: String, detail: String, targetDate: Date?, phase: FlightPhase) {
+    init(id: UUID = UUID(), title: String, targetDate: Date?, offset: TimeInterval, phase: FlightPhase) {
         self.id = id
         self.title = title
-        self.detail = detail
         self.targetDate = targetDate
+        self.offset = offset
         self.phase = phase
     }
 
     static func standardTemplate(relativeTo launchDate: Date?) -> [FlightEvent] {
         // Offsets follow SpaceX's published timelines for Starship V3 (Flights 12 and 13, 2026).
         // Post-SECO events assume the suborbital profile; orbital flights run much longer.
-        let milestones: [(TimeInterval, String, String, FlightPhase)] = [
-            (-24 * 60 * 60, "Launch watch", "Begin monitoring for weather, marine notices, road closures, and webcast updates.", .preflight),
-            (-8 * 60 * 60, "Road and pad clear", "Final pad access closes before propellant operations.", .preflight),
-            (-60 * 60, "Livestream watch", "Check official channels for webcast availability and updated target time.", .preflight),
-            (-50 * 60, "Flight director poll", "Teams verify GO for propellant loading.", .preflight),
-            (-39 * 60, "Propellant load", "Ship and booster liquid oxygen and methane loading begins.", .preflight),
-            (-21 * 60 - 30, "Engine chill", "Raptor engine chill begins on booster and ship.", .preflight),
-            (-30, "Go for launch", "Flight director verifies GO for launch.", .preflight),
-            (0, "Liftoff", "Super Heavy and Starship clear the launch mount.", .launch),
-            (45, "Max Q", "Vehicle passes through peak aerodynamic pressure.", .ascent),
-            (2 * 60 + 24, "Hot staging", "Ship engines ignite and the stages separate.", .ascent),
-            (2 * 60 + 30, "Boostback burn", "Super Heavy turns back toward its landing or splashdown zone.", .booster),
-            (6 * 60 + 34, "Booster landing burn", "Super Heavy targets its planned landing or splashdown profile.", .booster),
-            (8 * 60 + 11, "Ship engine cutoff", "Starship reaches its planned coast phase if ascent objectives continue nominally.", .ship),
-            (47 * 60 + 47, "Ship reentry", "Starship begins entry interface and heating assessment.", .ship),
-            (65 * 60 + 8, "Landing flip", "Ship flips and lights its landing burn.", .ship),
-            (65 * 60 + 26, "Ship splashdown", "Flight test objectives conclude with the planned terminal event.", .ship)
+        let milestones: [(TimeInterval, String, FlightPhase)] = [
+            (-24 * 60 * 60, "Launch watch", .preflight),
+            (-8 * 60 * 60, "Road and pad clear", .preflight),
+            (-60 * 60, "Livestream watch", .preflight),
+            (-50 * 60, "Flight director poll", .preflight),
+            (-39 * 60, "Propellant load", .preflight),
+            (-21 * 60 - 30, "Engine chill", .preflight),
+            (-30, "Go for launch", .preflight),
+            (0, "Liftoff", .ascent),
+            (45, "Max Q", .ascent),
+            (2 * 60 + 24, "Hot staging", .ascent),
+            (2 * 60 + 30, "Boostback burn", .booster),
+            (6 * 60 + 34, "Booster landing burn", .booster),
+            (8 * 60 + 11, "Ship engine cutoff", .ship),
+            (47 * 60 + 47, "Ship reentry", .ship),
+            (65 * 60 + 8, "Landing flip", .ship),
+            (65 * 60 + 26, "Ship splashdown", .ship)
         ]
 
-        return milestones.map { offset, title, detail, phase in
-            FlightEvent(title: title, detail: detail, targetDate: launchDate?.addingTimeInterval(offset), phase: phase)
+        return milestones.map { offset, title, phase in
+            FlightEvent(title: title, targetDate: launchDate?.addingTimeInterval(offset), offset: offset, phase: phase)
         }
     }
 }
 
 enum FlightPhase: String, Codable, CaseIterable {
     case preflight = "Preflight"
-    case launch = "Launch"
     case ascent = "Ascent"
     case booster = "Booster"
     case ship = "Ship"
-}
-
-struct StarshipSettings: Codable, Hashable {
-    var usesUTC: Bool = false
-    var notificationsEnabled: Bool = true
-    var liveActivityEnabled: Bool = true
-    var highContrastTelemetry: Bool = false
 }
